@@ -1,0 +1,217 @@
+# v5 Test Report
+
+**Date:** April 3-4, 2026
+**Harper Version:** 5.0.0-beta.8 (started on beta.7)
+**Environment:** 4-node Fabric cluster on Linode (stage)
+**Component:** harper-ecommerce-template (Next.js 15.4.11 + @harperdb/nextjs 1.2.2)
+
+## Cluster
+
+| Node | Ops API | HTTP API |
+|------|---------|----------|
+| nl-ams-1 | https://nl-ams-1.v5-testing.akamai.stage.harperfabric.com:9925 | :9926 |
+| se-sto-1 | https://se-sto-1.v5-testing.akamai.stage.harperfabric.com:9925 | :9926 |
+| us-lax-1 | https://us-lax-1.v5-testing.akamai.stage.harperfabric.com:9925 | :9926 |
+| us-ord-1 | https://us-ord-1.v5-testing.akamai.stage.harperfabric.com:9925 | :9926 |
+
+## Workarounds Required
+
+Three workarounds were needed to get the component running on the cluster:
+
+1. **RocksDB lock conflict:** `next build` spawns multiple workers that each try to open the same RocksDB database. Built locally with `NODE_OPTIONS="--max-old-space-size=4096" npx next build --experimental-build-mode compile` and deployed with `prebuilt: true`.
+
+2. **Sandbox containment:** `componentLoader.ts` loads `extensionModule` via `scopedImport` with `applicationScope`, forcing it through the VM sandbox. When `@harperdb/nextjs` dynamically imports `next`, CJS modules are loaded as ESM and fail with `exports is not defined`. Set `dependencyContainment: false` in Harper config on all cluster nodes.
+
+## Deployment
+
+Built locally and deployed with prebuilt flag.
+
+```
+NODE_OPTIONS="--max-old-space-size=4096" npx next build --experimental-build-mode compile
+
+   ▲ Next.js 15.4.11
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 1000ms
+ ✓ Collecting page data
+ ✓ Collecting build traces
+ ✓ Finalizing page optimization
+
+Route (app)                                 Size  First Load JS
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /products
+└ ƒ /products/[id]
++ First Load JS shared by all            99.9 kB
+
+ƒ  (Dynamic)  server-rendered on demand
+```
+
+```
+harper deploy project=harper-ecommerce-template \
+  target=https://us-ord-1.v5-testing.akamai.stage.harperfabric.com:9925 \
+  username='lavinia@harperdb.io' password="..." restart=true replicated=true
+
+message: "Successfully deployed: harper-ecommerce-template, restarting Harper"
+replicated:
+  - node: ep1-us-lax-1 - Successfully deployed
+  - node: iuk-nl-ams-1 - Successfully deployed
+  - node: ydc-se-sto-1 - Successfully deployed
+```
+
+## Test Results Summary
+
+| Test | Result |
+|------|--------|
+| Page rendering: homepage (all 4 nodes) | PASS |
+| Page rendering: /products (all 4 nodes) | PASS |
+| Page rendering: /products/[id] (all 4 nodes) | PASS |
+| REST API: GET all products | PASS |
+| REST API: GET single product | PASS |
+| REST API: GET Traits table | PASS |
+| REST API: POST create product | PASS |
+| REST API: PUT update product | PASS |
+| REST API: DELETE product | PASS |
+| Replication: created product appears on all nodes | PASS |
+| Replication: updated product propagates to all nodes | PASS |
+| Replication: deleted product removed from all nodes | PASS |
+| Edge case: invalid product ID (/products/999) | PASS (404) |
+| Edge case: invalid route (/nonexistent) | PASS (404) |
+| Edge case: string product ID (/products/abc) | PASS (404) |
+| Edge case: REST API nonexistent product | PASS (404) |
+| GraphQL: query all products | FAIL |
+| GraphQL: query single product | FAIL |
+
+## Manual Tests
+
+### 1. Page Rendering (all 4 nodes)
+
+All three routes return 200 on every node. Homepage shows 3 featured products with correct data. Products page loads with filter controls. Product detail page shows specs, features, and related products.
+
+```
+for host in nl-ams-1 se-sto-1 us-lax-1 us-ord-1:
+  / → 200
+  /products → 200
+  /products/11 → 200
+```
+
+### 2. REST API: Read Operations
+
+GET all products returns array of seeded products with correct schema (id, name, category, price, image, specs, description, features). GET single product returns complete record. GET Traits table returns trait data.
+
+```
+GET /Product/     → 200, array of products (first: "Portable Laptop Stand", $39.99, Accessories)
+GET /Product/11   → 200, full product record with specs and features
+GET /Traits/      → 200, [{"id":"1","traits":["sporty","likes computers","lives near a ski resort"]}]
+```
+
+### 3. REST API: Create Product
+
+POST to /Product/ with full record including id, name, category, price, image, description, features, specs. Returns created record ID. GET confirms all fields persisted correctly.
+
+```
+POST /Product/ {"id":"99","name":"Test Product","category":"Testing","price":9.99,...}
+  → "99"
+GET /Product/99
+  → {"id":"99","name":"Test Product","category":"Testing","price":9.99,"image":"...","specs":{"Material":"Plastic"},"description":"QA test product","features":["test feature"]}
+```
+
+### 4. REST API: Update Product
+
+PUT to /Product/99 replaces the entire record (PUT semantics, not PATCH). Only the fields sent in the PUT body are retained.
+
+```
+PUT /Product/99 {"name":"Updated Test Product","price":19.99}
+GET /Product/99 → {"name":"Updated Test Product","price":19.99,"id":"99"}
+```
+
+### 5. Replication: Update Propagation
+
+Product 99 (updated via PUT on us-ord-1) verified on all other nodes within seconds.
+
+```
+nl-ams-1: {"name":"Updated Test Product","price":19.99,"id":"99"}
+se-sto-1: {"name":"Updated Test Product","price":19.99,"id":"99"}
+us-lax-1: {"name":"Updated Test Product","price":19.99,"id":"99"}
+```
+
+### 6. REST API: Delete and Replication
+
+DELETE on us-ord-1, verified 404 on all 4 nodes.
+
+```
+DELETE /Product/99 → true
+nl-ams-1: 404
+se-sto-1: 404
+us-lax-1: 404
+us-ord-1: 404
+```
+
+### 7. Edge Cases
+
+All return 404 correctly.
+
+| Test | Request | Status |
+|------|---------|--------|
+| Invalid product ID | /products/999 | 404 |
+| Invalid route | /nonexistent | 404 |
+| String product ID | /products/abc | 404 |
+| REST nonexistent product | /Product/999 | 404 |
+
+### 8. GraphQL
+
+GraphQL endpoint is unreachable. POST to /graphql returns a Next.js 404 HTML page instead of a JSON GraphQL response. Tested on both cluster and locally.
+
+```
+lavinia@Lavinias-MacBook-Pro harper-ecommerce-template % curl -sk -X POST "https://us-ord-1.v5-testing.akamai.stage.harperfabric.com:9926/graphql" \
+  -H "Content-Type: application/json" \
+  -u "lavinia@harperdb.io:redacted" \
+  -d '{"query":"{ Product { id name category price } }"}'
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/_next/static/css/cfddc0e2b913ca42.css" data-precedence="next"/><link rel="preload" as="script" fetchPriority="low" href="/_ne ....
+```
+
+## Bugs Found During Testing
+
+### 1. Harper core: VM sandbox breaks CJS module loading for extensions (Open)
+
+When `componentLoader.ts` loads an `extensionModule` via `scopedImport` with `applicationScope`, the extension and all its dependencies enter the VM sandbox. CJS modules like `next/dist/server/next.js` are loaded as `SourceTextModule` (ESM) where `exports` is not defined.
+
+Error: `ReferenceError: exports is not defined`
+
+Workaround: Set `dependencyContainment: false` in harper config.
+
+### 2. @harperdb/nextjs: logger.loggerWithTag is not a function (Fixed in 1.2.2)
+
+Extension called `logger.loggerWithTag()` but the correct API is `logger.withTag()`. 
+Fix: https://github.com/HarperFast/nextjs/pull/35
+
+### 3. RocksDB: multiple process lock conflict during Next.js build (Open)
+
+`next build` spawns multiple workers that each import `harperdb` and try to open RocksDB. Only one process can hold the lock. This prevents both in-harper builds and standalone `npx next build`.
+
+Workaround: Build with `--experimental-build-mode compile` and deploy with `prebuilt: true`.
+
+GH Issue: https://github.com/HarperFast/rocksdb-js/issues/490
+
+### 4. @harperdb/nextjs: GraphQL endpoint unreachable with files: '/*' (Open)
+
+When `@harperdb/nextjs` is configured with `files: '/*'`, the Next.js request handler intercepts all routes including `/graphql`. Next.js returns its own 404 for routes that don't exist in the app directory, preventing harper's GraphQL handler from responding.
+
+GH Issue: https://github.com/HarperFast/nextjs/issues/36
+
+Reproduce:
+```
+curl -sk -X POST "https://us-ord-1.v5-testing.akamai.stage.harperfabric.com:9926/graphql" \
+  -H "Content-Type: application/json" \
+  -u "lavinia@harperdb.io:Stephenhawking96.," \
+  -d '{"query":"{ Product { id name category price } }"}'
+
+Expected: JSON GraphQL response
+Actual: Next.js 404 HTML page
+```
+
+## Tests Not Run
+
+- **Algolia search integration:** No API keys configured on cluster
+- **OpenAI personalization:** No API keys configured on cluster
+- **Static site generation:** Blocked by RocksDB lock conflict
+- **Performance/load testing:** No automated tests defined, functional testing prioritized during manual tests
