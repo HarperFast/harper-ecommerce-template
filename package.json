@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "harperdb-nextjs dev",
-    "build": "harperdb-nextjs build",
-    "start": "harperdb-nextjs start",
+    "dev": "harper run .",
+    "build": "harper run build",
+    "start": "harper run start",
     "lint": "next lint"
   },
   "dependencies": {
     "@harperdb/http-cache": "^1.1.0",
-    "@harperdb/nextjs": "^1.1.1",
+    "@harperfast/nextjs": "^2.0.0",
     "@radix-ui/react-dialog": "^1.1.1",
     "@radix-ui/react-dropdown-menu": "^2.1.1",
     "@radix-ui/react-select": "^2.1.1",
@@ -20,7 +20,7 @@
     "algoliasearch": "^5.20.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
-    "harperdb": "^4.5.1",
+    "harper": "^5.0.10",
     "lucide-react": "^0.525.0",
     "next": "15.4.11",
     "openai": "^5.9.1",
@@ -38,4 +38,3 @@
   },
   "license": "Apache-2.0"
 }
-

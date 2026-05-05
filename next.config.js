@@ -1,8 +1,10 @@
+import { withHarper } from '@harperfast/nextjs';
+
 const nextConfig = {
 	reactStrictMode: false,
-  eslint: { ignoreDuringBuilds: true, },
-  images: { unoptimized: true },
-  webpack: (config) => {
+	eslint: { ignoreDuringBuilds: true, },
+	images: { unoptimized: true },
+	webpack: (config) => {
 		config.externals.push({
 			harperdb: 'commonjs harperdb',
 		});
@@ -10,4 +12,4 @@ const nextConfig = {
 	},
 };
 
-module.exports = nextConfig;
+module.exports = withHarper(nextConfig);
