@@ -2,6 +2,7 @@
  * BOOTSTRAP
  ***************************************************/
 
+import { tables } from 'harper';
 import productdata from "./productdata.json" with { type: "json" };
 
 // product table seed data

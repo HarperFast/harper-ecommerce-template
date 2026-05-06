@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "harper run dev",
-    "build": "harper run build",
-    "start": "harper run start",
+    "dev": "HARPER_NEXTJS_MODE=dev harper run .",
+    "build": "HARPER_NEXTJS_MODE=build harper run .",
+    "start": "harper run .",
     "lint": "next lint"
   },
   "dependencies": {

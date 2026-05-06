@@ -4,4 +4,3 @@ jsResource:
   files: './resources.js'
 '@harperfast/nextjs':
   package: '@harperfast/nextjs'
-  files: '/*'
