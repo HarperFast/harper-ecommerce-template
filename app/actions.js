@@ -1,12 +1,12 @@
 'use server';
-import { tables } from 'harperdb';
+import { tables } from 'harper';
 const { Product } = tables;
 import { initAlgolia, initOpenai } from '@/lib/utils';
 
 // Harper DB Server Actions
 export async function listProducts(conditions = {}) {
 	const products = [];
-  const results = Product.search(conditions);
+	const results = Product.search(conditions);
 	for await (const product of results) {
 		products.push(product);
 	}
@@ -28,7 +28,7 @@ export async function updateUserTraits(id = "1", traits) {
 
 // Algolia Search Server Actions
 const algoliaClient = initAlgolia();
-export async function searchProducts(searchTerm = ''){
+export async function searchProducts(searchTerm = '') {
 	if (algoliaClient) {
 		return await algoliaClient.searchSingleIndex({
 			indexName: 'productdata',

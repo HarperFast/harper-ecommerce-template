@@ -1,4 +1,4 @@
-import 'harperdb';
+import 'harper';
 import ProductPage from './product-page';
 import { listProducts, getProduct } from '@/app/actions';
 

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "harper run .",
+    "dev": "harper run dev",
     "build": "harper run build",
     "start": "harper run start",
     "lint": "next lint"

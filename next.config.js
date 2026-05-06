@@ -1,4 +1,4 @@
-import { withHarper } from '@harperfast/nextjs';
+const withHarper = require('@harperfast/nextjs');
 
 const nextConfig = {
 	reactStrictMode: false,
@@ -6,7 +6,7 @@ const nextConfig = {
 	images: { unoptimized: true },
 	webpack: (config) => {
 		config.externals.push({
-			harperdb: 'commonjs harperdb',
+			harper: 'commonjs harper',
 		});
 		return config;
 	},
