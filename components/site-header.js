@@ -14,11 +14,7 @@ export function SiteHeader() {
   function search(e) {
     // TODO: could debounce for optimization
     searchProducts(e.target.value)
-      .then(res => {
-        if (res?.hits) {
-          setSearchResults(res.hits);
-        }
-      });
+      .then(res => setSearchResults(Array.isArray(res) ? res : []));
   }
 
   return (

@@ -19,7 +19,6 @@ import { getUserTraits, updateUserTraits } from '@/app/actions';
 
 export const ControlPanelContext = createContext({
   aiPersonalizationEnabled: true,
-  // algoliaEnabled: true,
 });
 
 export function ControlPanel() {
@@ -27,7 +26,6 @@ export function ControlPanel() {
   const [traitsReady, setTraitsReady] = useState(null);
   const [traitValue, setTraitValue] = useState('');
   const [aiPersonalizationEnabled, setAiPersonalizationEnabled] = useState(true);
-  // const [algoliaEnabled, setAlgoliaEnabled] = useState(true);
 
 
   useEffect(() => {
@@ -94,14 +92,6 @@ export function ControlPanel() {
                     onClick={() => setAiPersonalizationEnabled(!aiPersonalizationEnabled)}
                   />
                 </div>
-                {/* <div>
-                  <span style={{ paddingRight: 20 }}>Algolia Search Enable</span>
-                  <Switch
-                    text={algoliaEnabled ? 'On' : 'Off'}
-                    checked = {algoliaEnabled}
-                    onClick={() => setAlgoliaEnabled(!algoliaEnabled)}
-                  />
-                </div> */}
               </div>
             </div>
             {/* User traits tied to AI product personalization */}
