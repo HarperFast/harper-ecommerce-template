@@ -11,7 +11,13 @@ import { dirname, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURE_PATH = resolve(__dirname, '..');
+// Use the data-layer fixture (schema + seed, no @harperfast/nextjs plugin) rather
+// than the repo root. The plugin builds/serves Next.js on boot, which spawns build
+// workers that contend for the RocksDB lock the test Harper process already holds
+// (known `next build` lock conflict) and owns the HTTP port. We verify the data
+// layer the v4->v5 migration touched directly via the Operations API; see fixture
+// config.yaml for the full rationale.
+const FIXTURE_PATH = resolve(__dirname, 'fixture');
 
 // The `harper` package's `exports` map only exposes ".", so the harness's
 // auto-resolution of 'harper/dist/bin/harper.js' fails with ERR_PACKAGE_PATH_NOT_EXPORTED.
@@ -19,12 +25,12 @@ const FIXTURE_PATH = resolve(__dirname, '..');
 const require = createRequire(import.meta.url);
 const harperBinPath = resolve(dirname(require.resolve('harper')), 'bin/harper.js');
 
-// This template runs the @harperfast/nextjs plugin, which owns the HTTP port
-// (port 9926) and intercepts all HTTP routes — so the @table @export REST API is
-// not reliably reachable over HTTP here. We therefore exercise the Harper data
-// layer (tables, schema, seed data, CRUD) through the Operations API, which is the
-// stable, plugin-independent surface for verifying the v5 upgrade.
-void suite('Harper ecommerce template (v5)', (ctx: ContextWithHarper) => {
+// The real app runs the @harperfast/nextjs plugin, which owns the HTTP port and
+// intercepts all HTTP routes, and builds Next.js on boot (incompatible with the
+// ephemeral test harness — see fixture config.yaml). These tests load only the
+// data-layer fixture and exercise the Harper tables/schema/seed/CRUD through the
+// Operations API, the stable surface for verifying the v4->v5 migration.
+void suite('Harper ecommerce template data layer (v5)', (ctx: ContextWithHarper) => {
 	before(async () => {
 		await setupHarperWithFixture(ctx, FIXTURE_PATH, { harperBinPath });
 	});

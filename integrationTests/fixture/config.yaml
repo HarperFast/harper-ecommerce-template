@@ -1,0 +1,19 @@
+# Integration-test fixture: the Harper DATA LAYER of the ecommerce template,
+# without the @harperfast/nextjs plugin.
+#
+# The real app's config.yaml loads @harperfast/nextjs, which builds and serves
+# the Next.js frontend on boot. That production build spawns worker processes
+# that each try to open the same RocksDB database the running Harper process
+# already holds a lock on, which fails under the ephemeral single-process model
+# the integration-testing harness uses (known issue: RocksDB multi-process lock
+# conflict during `next build`). The plugin also owns the HTTP port, so the REST
+# API is not reliably HTTP-reachable.
+#
+# These tests therefore exercise the data layer that the v4->v5 migration
+# actually touched (the `import { tables } from 'harper'` seed logic and the
+# @table @export schema) directly via the Operations API. The Next.js layer is
+# covered by the manual cluster test report in v5-test-results.mdx.
+graphqlSchema:
+  files: '*.graphql'
+jsResource:
+  files: './resources.js'
