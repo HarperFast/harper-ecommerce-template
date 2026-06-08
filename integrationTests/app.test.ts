@@ -1,0 +1,138 @@
+import { suite, test, before, after } from 'node:test';
+import { strictEqual, ok } from 'node:assert/strict';
+import {
+	setupHarperWithFixture,
+	teardownHarper,
+	sendOperation,
+	type ContextWithHarper,
+} from '@harperfast/integration-testing';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import { createRequire } from 'node:module';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const FIXTURE_PATH = resolve(__dirname, '..');
+
+// The `harper` package's `exports` map only exposes ".", so the harness's
+// auto-resolution of 'harper/dist/bin/harper.js' fails with ERR_PACKAGE_PATH_NOT_EXPORTED.
+// Resolve the CLI from the (exported) main entry and pass it explicitly.
+const require = createRequire(import.meta.url);
+const harperBinPath = resolve(dirname(require.resolve('harper')), 'bin/harper.js');
+
+// This template runs the @harperfast/nextjs plugin, which owns the HTTP port
+// (port 9926) and intercepts all HTTP routes — so the @table @export REST API is
+// not reliably reachable over HTTP here. We therefore exercise the Harper data
+// layer (tables, schema, seed data, CRUD) through the Operations API, which is the
+// stable, plugin-independent surface for verifying the v5 upgrade.
+void suite('Harper ecommerce template (v5)', (ctx: ContextWithHarper) => {
+	before(async () => {
+		await setupHarperWithFixture(ctx, FIXTURE_PATH, { harperBinPath });
+	});
+
+	after(async () => {
+		await teardownHarper(ctx);
+	});
+
+	void test('Harper boots with the schema and seeds the Product table', async () => {
+		// resources.js seeds 15 products from productdata.json on first boot.
+		const result = (await sendOperation(ctx, {
+			operation: 'search_by_conditions',
+			database: 'data',
+			table: 'Product',
+			operator: 'and',
+			get_attributes: ['id', 'name', 'category', 'price'],
+			conditions: [
+				{ search_attribute: 'id', search_type: 'greater_than_equal', search_value: '0' },
+			],
+		})) as Array<{ id: string }>;
+		ok(Array.isArray(result), 'expected an array of products');
+		ok(result.length >= 15, `expected at least 15 seeded products, got ${result.length}`);
+	});
+
+	void test('Product.get returns a seeded record by id', async () => {
+		const result = (await sendOperation(ctx, {
+			operation: 'search_by_id',
+			database: 'data',
+			table: 'Product',
+			ids: ['11'],
+			get_attributes: ['id', 'name', 'category', 'price', 'specs'],
+		})) as Array<{ id: string; name: string; category: string; price: number }>;
+		strictEqual(result.length, 1, 'expected exactly one product for id 11');
+		strictEqual(result[0].id, '11');
+		strictEqual(result[0].name, 'Portable Laptop Stand');
+		strictEqual(result[0].category, 'Accessories');
+	});
+
+	void test('Traits table is seeded with the default user traits', async () => {
+		const result = (await sendOperation(ctx, {
+			operation: 'search_by_id',
+			database: 'data',
+			table: 'Traits',
+			ids: ['1'],
+			get_attributes: ['id', 'traits'],
+		})) as Array<{ id: string; traits: string[] }>;
+		strictEqual(result.length, 1, 'expected exactly one Traits record for id 1');
+		strictEqual(result[0].id, '1');
+		ok(Array.isArray(result[0].traits), 'expected traits to be an array');
+		ok(result[0].traits.includes('sporty'), 'expected the seeded "sporty" trait');
+	});
+
+	void test('insert, update, and delete a product round-trips through Harper', async () => {
+		const id = 'integ-test-1';
+
+		// Insert
+		await sendOperation(ctx, {
+			operation: 'insert',
+			database: 'data',
+			table: 'Product',
+			records: [
+				{ id, name: 'Integration Test Widget', category: 'Testing', price: 9.99 },
+			],
+		});
+
+		let read = (await sendOperation(ctx, {
+			operation: 'search_by_id',
+			database: 'data',
+			table: 'Product',
+			ids: [id],
+			get_attributes: ['id', 'name', 'price'],
+		})) as Array<{ id: string; name: string; price: number }>;
+		strictEqual(read.length, 1, 'expected the inserted product to exist');
+		strictEqual(read[0].name, 'Integration Test Widget');
+		strictEqual(read[0].price, 9.99);
+
+		// Update
+		await sendOperation(ctx, {
+			operation: 'update',
+			database: 'data',
+			table: 'Product',
+			records: [{ id, price: 19.99 }],
+		});
+
+		read = (await sendOperation(ctx, {
+			operation: 'search_by_id',
+			database: 'data',
+			table: 'Product',
+			ids: [id],
+			get_attributes: ['id', 'name', 'price'],
+		})) as Array<{ id: string; name: string; price: number }>;
+		strictEqual(read[0].price, 19.99, 'expected the updated price');
+
+		// Delete
+		await sendOperation(ctx, {
+			operation: 'delete',
+			database: 'data',
+			table: 'Product',
+			ids: [id],
+		});
+
+		read = (await sendOperation(ctx, {
+			operation: 'search_by_id',
+			database: 'data',
+			table: 'Product',
+			ids: [id],
+			get_attributes: ['id'],
+		})) as Array<unknown>;
+		strictEqual(read.length, 0, 'expected the product to be deleted');
+	});
+});

@@ -35,7 +35,7 @@ export async function searchProducts(searchTerm = '') {
 			searchParams: { query: searchTerm },
 		});
 	}
-	// TODO: return harperdb graphql query
+	// TODO: return Harper graphql query
 	return [];
 }
 
