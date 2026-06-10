@@ -26,7 +26,7 @@ const CACHE_RULES_REFRESH_MS = 30_000;
 // Module-level state so every CacheHandler instance in this worker shares one
 // rules cache, one invalidation mirror, and one table subscription.
 const invalidationTimes = new Map();
-let cachedRules = null;
+let rulesPromise = null;
 let rulesLoadedAt = 0;
 let initialized = false;
 
@@ -89,21 +89,27 @@ async function loadRules(appCache) {
 	return rules;
 }
 
+// Promise-cached so concurrent callers awaiting an empty/stale cache share one
+// in-flight CacheRules read instead of each issuing a duplicate DB scan.
+function getRules(appCache) {
+	const now = Date.now();
+	if (!rulesPromise || now - rulesLoadedAt > CACHE_RULES_REFRESH_MS) {
+		const previousRules = rulesPromise;
+		rulesLoadedAt = now;
+		rulesPromise = loadRules(appCache).catch((error) => {
+			trace('CacheRules load failed; continuing without rules', error);
+			// Keep serving the last good rules (or none on the first load).
+			return previousRules ?? [];
+		});
+	}
+	return rulesPromise;
+}
+
 async function matchRule(appCache, cacheKey) {
 	const path = pathOf(cacheKey);
 	if (path === undefined) return undefined;
-	const now = Date.now();
-	if (!cachedRules || now - rulesLoadedAt > CACHE_RULES_REFRESH_MS) {
-		try {
-			cachedRules = await loadRules(appCache);
-			rulesLoadedAt = now;
-		} catch (error) {
-			trace('CacheRules load failed; continuing without rules', error);
-			cachedRules = cachedRules ?? [];
-			rulesLoadedAt = now;
-		}
-	}
-	for (const rule of cachedRules) {
+	const rules = await getRules(appCache);
+	for (const rule of rules) {
 		if (rule.patterns.some((pattern) => pattern.test(path))) return rule;
 	}
 	return undefined;
@@ -111,7 +117,9 @@ async function matchRule(appCache, cacheKey) {
 
 function recordInvalidation(id, timestamp) {
 	if (id == null) return;
-	const key = String(id);
+	// Trim so a tag stored as " pdp" still matches the invalidation key "pdp".
+	const key = String(id).trim();
+	if (key === '') return;
 	const current = invalidationTimes.get(key);
 	if (current === undefined || timestamp > current) invalidationTimes.set(key, timestamp);
 }
@@ -121,7 +129,9 @@ function recordInvalidation(id, timestamp) {
 function isInvalidated(keys, refreshedAt) {
 	for (const key of keys) {
 		if (key == null) continue;
-		const invalidatedAt = invalidationTimes.get(String(key));
+		const normalized = String(key).trim();
+		if (normalized === '') continue;
+		const invalidatedAt = invalidationTimes.get(normalized);
 		if (invalidatedAt !== undefined && invalidatedAt >= refreshedAt) return true;
 	}
 	return false;
@@ -155,10 +165,18 @@ function ensureInitialized(appCache) {
 	})();
 }
 
+// Tags are trimmed on the way in so stored cacheTags always match the trimmed
+// keys recordInvalidation() uses.
 function collectTags(data, ctx) {
 	const tags = new Set();
-	for (const tag of ctx?.tags ?? []) tags.add(tag);
-	for (const tag of data?.headers?.['x-next-cache-tags']?.split?.(',') ?? []) tags.add(tag);
+	for (const tag of ctx?.tags ?? []) {
+		const trimmed = typeof tag === 'string' ? tag.trim() : tag;
+		if (trimmed != null && trimmed !== '') tags.add(trimmed);
+	}
+	for (const tag of data?.headers?.['x-next-cache-tags']?.split?.(',') ?? []) {
+		const trimmed = tag.trim();
+		if (trimmed !== '') tags.add(trimmed);
+	}
 	return [...tags];
 }
 
@@ -224,7 +242,11 @@ module.exports = class CacheHandler {
 	}
 
 	async revalidateTag(tags) {
-		const tagList = [tags].flat().filter((tag) => tag != null);
+		const tagList = [tags]
+			.flat()
+			.filter((tag) => tag != null)
+			.map((tag) => String(tag).trim())
+			.filter((tag) => tag !== '');
 		const timestamp = Date.now();
 		for (const tag of tagList) recordInvalidation(tag, timestamp);
 		try {

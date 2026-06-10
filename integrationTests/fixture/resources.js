@@ -39,12 +39,41 @@ for (const rule of CACHE_RULES) {
 // path via get(), bypass rules, and soft invalidation. The outcome lands in
 // the fixture-only CacheProbe table so the test can assert it over the
 // Operations API without booting the Next.js plugin.
-const probe = { id: 'cache-roundtrip', ok: false, bypassRespected: false, invalidationMiss: false, detail: '' };
+const probe = {
+	id: 'cache-roundtrip',
+	ok: false,
+	bypassRespected: false,
+	invalidationMiss: false,
+	singleRulesLoad: false,
+	trimmedInvalidationMiss: false,
+	detail: '',
+};
 try {
 	const CacheHandler = (await import('./cacheHandler.cjs')).default;
 	const handler = new CacheHandler({});
 	const cacheKey = '/products/cache-probe';
 	const value = { kind: 'APP_PAGE', html: '<html>cache-probe</html>', rscData: 'r'.repeat(64) };
+
+	// Stampede check (must run before anything else touches the handler so the
+	// module-level rules cache is still empty): N concurrent get() calls must
+	// share ONE in-flight CacheRules load, not issue one scan each.
+	const realSearch = databases.appCache.CacheRules.search.bind(databases.appCache.CacheRules);
+	let rulesSearchCount = 0;
+	databases.appCache.CacheRules.search = (...args) => {
+		rulesSearchCount += 1;
+		return realSearch(...args);
+	};
+	try {
+		await Promise.all([
+			handler.get('/products/stampede-check', {}),
+			handler.get('/products/stampede-check', {}),
+			handler.get('/products/stampede-check', {}),
+		]);
+	} finally {
+		delete databases.appCache.CacheRules.search;
+	}
+	probe.singleRulesLoad = rulesSearchCount === 1;
+	if (!probe.singleRulesLoad) probe.detail += `rulesSearchCount=${rulesSearchCount};`;
 
 	// Blob round-trip through the real Cache table.
 	await handler.set(cacheKey, value, { tags: ['probe-tag'] });
@@ -65,7 +94,22 @@ try {
 	const afterInvalidation = await handler.get(cacheKey, {});
 	probe.invalidationMiss = afterInvalidation == null;
 
-	probe.detail = probe.ok && probe.bypassRespected && probe.invalidationMiss ? 'ok' : 'assertion failed';
+	// Whitespace-trim check: a tag stored with padding (" padded-tag ") must
+	// still be invalidated by the clean key "padded-tag".
+	const trimKey = '/products/cache-probe-trim';
+	await handler.set(trimKey, value, { tags: [' padded-tag '] });
+	const beforeTrimInvalidation = await handler.get(trimKey, {});
+	await handler.revalidateTag('padded-tag');
+	const afterTrimInvalidation = await handler.get(trimKey, {});
+	probe.trimmedInvalidationMiss = beforeTrimInvalidation != null && afterTrimInvalidation == null;
+
+	const allPassed =
+		probe.ok &&
+		probe.bypassRespected &&
+		probe.invalidationMiss &&
+		probe.singleRulesLoad &&
+		probe.trimmedInvalidationMiss;
+	probe.detail = allPassed ? 'ok' : `assertion failed;${probe.detail}`;
 } catch (error) {
 	probe.detail = `threw: ${error?.message ?? error}`;
 }

@@ -203,13 +203,22 @@ void suite('Harper ecommerce template data layer (v5)', (ctx: ContextWithHarper)
 			database: 'data',
 			table: 'CacheProbe',
 			ids: ['cache-roundtrip'],
-			get_attributes: ['id', 'ok', 'bypassRespected', 'invalidationMiss', 'detail'],
-		})) as Array<{ ok: boolean; bypassRespected: boolean; invalidationMiss: boolean; detail: string }>;
+			get_attributes: ['id', 'ok', 'bypassRespected', 'invalidationMiss', 'singleRulesLoad', 'trimmedInvalidationMiss', 'detail'],
+		})) as Array<{
+			ok: boolean;
+			bypassRespected: boolean;
+			invalidationMiss: boolean;
+			singleRulesLoad: boolean;
+			trimmedInvalidationMiss: boolean;
+			detail: string;
+		}>;
 		strictEqual(probes.length, 1, 'expected the cache probe record');
 		const probe = probes[0];
 		strictEqual(probe.ok, true, `expected get() to deserialize the Blob-backed set() payload (detail: ${probe.detail})`);
 		strictEqual(probe.bypassRespected, true, `expected the bypassCache rule to prevent storage (detail: ${probe.detail})`);
 		strictEqual(probe.invalidationMiss, true, `expected revalidateTag to soft-invalidate to a MISS (detail: ${probe.detail})`);
+		strictEqual(probe.singleRulesLoad, true, `expected concurrent get() calls to share one CacheRules load (detail: ${probe.detail})`);
+		strictEqual(probe.trimmedInvalidationMiss, true, `expected a padded tag to match its trimmed invalidation key (detail: ${probe.detail})`);
 
 		// The invalidated entry is a soft MISS: the row itself is still present
 		// with the serialized payload in the Blob column.
