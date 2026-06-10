@@ -5,6 +5,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { listProducts } from "@/app/actions";
 
+// ISR: cache the server-rendered page (via the Harper cache handler) and
+// regenerate at most every 60 seconds.
+export const revalidate = 60;
+
 export default async function Home() {
   const featuredProducts = JSON.parse(await listProducts({ limit: 3 }));
   const features = [
