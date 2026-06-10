@@ -8,6 +8,7 @@ import {
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { createRequire } from 'node:module';
+import { copyFileSync } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Use the data-layer fixture (schema + seed, no @harperfast/nextjs plugin) rather
@@ -47,6 +48,12 @@ async function op<T = unknown>(ctx: ContextWithHarper, operation: Record<string,
 // Operations API, the stable surface for verifying the v4->v5 migration.
 void suite('Harper ecommerce template data layer (v5)', (ctx: ContextWithHarper) => {
 	before(async () => {
+		// The fixture's resources.js exercises the REAL repo-root cache handler
+		// against live Harper tables (Blob round-trip, rules, invalidation). Copy
+		// it in here because Harper restricts a component to files inside its own
+		// directory; the copy is gitignored so the production file stays the
+		// single source of truth.
+		copyFileSync(resolve(__dirname, '../cacheHandler.cjs'), resolve(FIXTURE_PATH, 'cacheHandler.cjs'));
 		await setupHarperWithFixture(ctx, FIXTURE_PATH, { harperBinPath });
 	});
 
@@ -155,5 +162,68 @@ void suite('Harper ecommerce template data layer (v5)', (ctx: ContextWithHarper)
 			get_attributes: ['id'],
 		})) as Array<unknown>;
 		strictEqual(read.length, 0, 'expected the product to be deleted');
+	});
+
+	void test('appCache cache tables exist and CacheRules is seeded with the four rules', async () => {
+		const rules = (await op(ctx, {
+			operation: 'search_by_value',
+			database: 'appCache',
+			table: 'CacheRules',
+			search_attribute: 'id',
+			search_value: '*',
+			get_attributes: ['id', 'priority', 'pathPatterns', 'groupCode', 'bypassCache'],
+		})) as Array<{ id: string; priority: number; pathPatterns: string[]; groupCode?: string; bypassCache?: boolean }>;
+		strictEqual(rules.length, 4, `expected exactly 4 seeded cache rules, got ${rules.length}`);
+		const byId = new Map(rules.map((rule) => [rule.id, rule]));
+		ok(byId.get('personalized')?.bypassCache === true, 'expected the personalized rule to bypass the cache');
+		strictEqual(byId.get('pdp')?.groupCode, 'pdp');
+		strictEqual(byId.get('listing')?.groupCode, 'listing');
+		strictEqual(byId.get('home')?.groupCode, 'home');
+		for (const rule of rules) {
+			ok(Array.isArray(rule.pathPatterns) && rule.pathPatterns.length > 0, `expected pathPatterns on rule ${rule.id}`);
+		}
+
+		// CacheInvalidation exists and holds the probe's revalidateTag write.
+		const invalidations = (await op(ctx, {
+			operation: 'search_by_id',
+			database: 'appCache',
+			table: 'CacheInvalidation',
+			ids: ['probe-tag'],
+			get_attributes: ['id', 'timestamp'],
+		})) as Array<{ id: string; timestamp: number }>;
+		strictEqual(invalidations.length, 1, 'expected the probe-tag invalidation row');
+		ok(typeof invalidations[0].timestamp === 'number', 'expected a numeric invalidation timestamp');
+	});
+
+	void test('cacheHandler.cjs round-trips a Blob-backed entry and honors bypass/invalidation', async () => {
+		// resources.js exercised the real cache handler at boot and recorded the
+		// outcome; see integrationTests/fixture/resources.js.
+		const probes = (await op(ctx, {
+			operation: 'search_by_id',
+			database: 'data',
+			table: 'CacheProbe',
+			ids: ['cache-roundtrip'],
+			get_attributes: ['id', 'ok', 'bypassRespected', 'invalidationMiss', 'detail'],
+		})) as Array<{ ok: boolean; bypassRespected: boolean; invalidationMiss: boolean; detail: string }>;
+		strictEqual(probes.length, 1, 'expected the cache probe record');
+		const probe = probes[0];
+		strictEqual(probe.ok, true, `expected get() to deserialize the Blob-backed set() payload (detail: ${probe.detail})`);
+		strictEqual(probe.bypassRespected, true, `expected the bypassCache rule to prevent storage (detail: ${probe.detail})`);
+		strictEqual(probe.invalidationMiss, true, `expected revalidateTag to soft-invalidate to a MISS (detail: ${probe.detail})`);
+
+		// The invalidated entry is a soft MISS: the row itself is still present
+		// with the serialized payload in the Blob column.
+		const entries = (await op(ctx, {
+			operation: 'search_by_id',
+			database: 'appCache',
+			table: 'Cache',
+			ids: ['/products/cache-probe'],
+			get_attributes: ['cacheKey', 'kind', 'groupCode', 'url', 'refreshedAt'],
+		})) as Array<{ cacheKey: string; kind: string; groupCode: string; url: string; refreshedAt: number }>;
+		strictEqual(entries.length, 1, 'expected the cache entry row to exist');
+		strictEqual(entries[0].kind, 'APP_PAGE');
+		strictEqual(entries[0].groupCode, 'pdp', 'expected the pdp rule groupCode on the stored entry');
+		strictEqual(entries[0].url, '/products/cache-probe');
+		ok(typeof entries[0].refreshedAt === 'number', 'expected a numeric refreshedAt');
 	});
 });

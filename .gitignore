@@ -7,6 +7,8 @@
 
 # testing
 /coverage
+# copied from the repo root by integrationTests/app.test.ts before boot
+/integrationTests/fixture/cacheHandler.cjs
 
 # next.js
 /.next/

@@ -1,6 +1,11 @@
+rest:
+  webSocket: false
 graphqlSchema:
   files: '*.graphql'
 jsResource:
   files: './resources.js'
 '@harperfast/nextjs':
   package: '@harperfast/nextjs'
+  setCwd: false
+  prebuilt: true
+  # NOTE: do NOT add `files: '/*'` under this plugin in @harperfast/nextjs 2.x

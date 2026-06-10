@@ -14,6 +14,39 @@ Almost 2% of global ecommerce sales flow through Harper Systems, with an average
 - View the frontend at [localhost:9926](http://localhost:9926/)
 - View the data in Harper Studio UI at [localhost:9925](http://localhost:9925/)
 
+## Build & Deploy
+
+The app runs on Next.js 16 with the [`@harperfast/nextjs`](https://www.npmjs.com/package/@harperfast/nextjs) 2.x plugin (`withHarper` in [next.config.js](./next.config.js)) and is deployed prebuilt (`prebuilt: true` in [config.yaml](./config.yaml)):
+
+- Build: `npm run build` (runs `next build --webpack`)
+- Serve the prebuilt app: `npm start` (runs `harper run .`)
+
+Static generation reads product data through Harper, so build on a machine whose local Harper root already has this app's schema and seed data (running `npm run dev` once takes care of that). The config pins the build to a single worker because each build worker loads the `harper` module and concurrent workers would contend for the database lock.
+
+Notes for constrained or clustered environments:
+
+- If a multi-worker build contends for the RocksDB lock, build with `next build --webpack --experimental-build-mode compile` and `NODE_OPTIONS="--max-old-space-size=4096"`.
+- If the cluster reports `exports is not defined`, set `dependencyContainment: false` in the node config (a node setting, not a repo change).
+
+## Caching
+
+Next.js Incremental Cache entries are stored in Harper instead of in process memory: [next.config.js](./next.config.js) points `cacheHandler` at [cacheHandler.cjs](./cacheHandler.cjs) and sets `cacheMaxMemorySize: 0`. The handler uses three tables in the `appCache` database (see [schema.graphql](./schema.graphql)):
+
+- `Cache` — one row per incremental-cache entry, with the payload v8-serialized into a `Blob` column
+- `CacheRules` — path-pattern policy (bypass patterns and group codes), seeded from [resources.js](./resources.js)
+- `CacheInvalidation` — a soft-invalidation log; cache reads, writes, and invalidation failures all degrade to a cache MISS so rendering never depends on the cache
+
+To invalidate cached entries, insert a row into `appCache.CacheInvalidation` whose `id` is a cache tag, a `CacheRules` `groupCode` (e.g. `pdp`), or a URL path, with `timestamp` set to the current epoch milliseconds. Every entry refreshed at or before that timestamp is then served as a MISS and re-rendered on next request. For example, via the Operations API:
+
+```json
+{
+	"operation": "insert",
+	"database": "appCache",
+	"table": "CacheInvalidation",
+	"records": [{ "id": "pdp", "timestamp": 1750000000000 }]
+}
+```
+
 ## Optional Config: OpenAI personalization & semantic search
 - Run `cp .env.template .env`
 - Add an `OPENAI_API_KEY` to the `.env` file

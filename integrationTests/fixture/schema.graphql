@@ -21,3 +21,43 @@ type Traits @table @export {
   id: ID @primaryKey
   traits: [String]
 }
+
+# Next.js incremental-cache tables — mirrors the repo-root schema.graphql
+# (no @export there either; the Operations API the tests use is admin-level
+# and reads non-exported tables).
+type Cache @table(database: "appCache", expiration: 86400) {
+  cacheKey: String @primaryKey
+  kind: String @indexed
+  data: Blob!
+  headers: String
+  cacheTags: String
+  groupCode: String @indexed
+  url: String @indexed
+  refreshedAt: Long @indexed
+}
+
+type CacheInvalidation @table(database: "appCache", expiration: 604800) {
+  id: Any @primaryKey
+  timestamp: Long
+}
+
+type CacheRules @table(database: "appCache") {
+  id: ID @primaryKey
+  description: String
+  priority: Int
+  pathPatterns: [String]!
+  groupCode: String
+  bypassCache: Boolean
+  neverExpire: Boolean
+}
+
+# Fixture-only: records the outcome of exercising the real cacheHandler.cjs
+# (copied into this fixture by app.test.ts) against live Harper tables, so the
+# test can assert the Blob round-trip through the Operations API.
+type CacheProbe @table {
+  id: ID @primaryKey
+  ok: Boolean
+  bypassRespected: Boolean
+  invalidationMiss: Boolean
+  detail: String
+}

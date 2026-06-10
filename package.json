@@ -4,14 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "HARPER_NEXTJS_MODE=dev harper run .",
-    "build": "HARPER_NEXTJS_MODE=build harper run .",
+    "build": "next build --webpack",
     "start": "harper run .",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test:integration": "harper-integration-test-run \"integrationTests/**/*.test.ts\""
   },
   "dependencies": {
-    "@harperdb/http-cache": "^1.1.0",
-    "@harperfast/nextjs": "^2.0.0",
+    "@harperfast/nextjs": "^2.2.1",
     "@radix-ui/react-dialog": "^1.1.1",
     "@radix-ui/react-dropdown-menu": "^2.1.1",
     "@radix-ui/react-select": "^2.1.1",
@@ -22,7 +21,7 @@
     "clsx": "^2.1.1",
     "harper": "^5.0.28",
     "lucide-react": "^0.525.0",
-    "next": "15.4.11",
+    "next": "^16.0.0",
     "openai": "^5.9.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
