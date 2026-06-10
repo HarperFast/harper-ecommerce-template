@@ -194,7 +194,12 @@ async function syncInvalidations(appCache) {
 		const subscription = await appCache.CacheInvalidation.subscribe({ omitCurrent: true });
 		subscription.on('data', (event) => {
 			if (event?.id == null) return;
-			recordInvalidation(event.id, event.value?.timestamp ?? Date.now());
+			const ts = event.value?.timestamp;
+			if (typeof ts !== 'number') {
+				warn(`CacheInvalidation subscription received event without a valid timestamp for id=${event.id}; ignoring`);
+				return;
+			}
+			recordInvalidation(event.id, ts);
 		});
 		subscription.on('error', (error) => {
 			warn('CacheInvalidation subscription error; cross-worker invalidations may be delayed', error);
