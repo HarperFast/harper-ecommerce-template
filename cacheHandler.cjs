@@ -23,10 +23,15 @@ const v8 = require('node:v8');
 
 const CACHE_RULES_REFRESH_MS = 30_000;
 const INVALIDATION_RESYNC_MS = 30_000;
+const INVALIDATION_PUT_RETRY_MS = 5_000;
 
 // Module-level state so every CacheHandler instance in this worker shares one
 // rules cache, one invalidation mirror, and one table subscription.
 const invalidationTimes = new Map();
+// Tags whose CacheInvalidation row failed to persist, awaiting retry
+// (tag -> invalidation timestamp; the newest timestamp wins on merge).
+const pendingInvalidationWrites = new Map();
+let invalidationRetryTimer = null;
 let rulesPromise = null;
 let rulesLoadedAt = 0;
 let initialized = false;
@@ -193,6 +198,69 @@ function ensureInitialized(appCache) {
 	void syncInvalidations(appCache);
 }
 
+// Write each invalidation row individually so one failing tag never abandons
+// the rest. Returns the entries that failed (tag -> timestamp). A successful
+// put supersedes any older pending retry for the same tag — a newer persisted
+// invalidation timestamp invalidates strictly more than an older one.
+async function persistInvalidations(appCache, entries) {
+	const failed = new Map();
+	for (const [tag, timestamp] of entries) {
+		try {
+			await appCache.CacheInvalidation.put({ id: tag, timestamp });
+			const pending = pendingInvalidationWrites.get(tag);
+			if (pending !== undefined && pending <= timestamp) pendingInvalidationWrites.delete(tag);
+		} catch (error) {
+			failed.set(tag, timestamp);
+			trace(`CacheInvalidation.put(${tag}) failed`, error);
+		}
+	}
+	return failed;
+}
+
+// Queue failed invalidation writes and (re)arm the backoff timer. Mirrors the
+// syncInvalidations retry pattern: cross-worker coherency depends on these
+// rows landing eventually, so keep retrying only the failed tags.
+function queueInvalidationRetry(failed) {
+	for (const [tag, timestamp] of failed) {
+		const current = pendingInvalidationWrites.get(tag);
+		if (current === undefined || timestamp > current) pendingInvalidationWrites.set(tag, timestamp);
+	}
+	scheduleInvalidationRetry();
+}
+
+function scheduleInvalidationRetry() {
+	if (invalidationRetryTimer || pendingInvalidationWrites.size === 0) return;
+	invalidationRetryTimer = setTimeout(() => {
+		invalidationRetryTimer = null;
+		void retryPendingInvalidations();
+	}, INVALIDATION_PUT_RETRY_MS);
+	// Never hold the process open just for the retry loop.
+	if (typeof invalidationRetryTimer.unref === 'function') invalidationRetryTimer.unref();
+}
+
+async function retryPendingInvalidations() {
+	const appCache = getAppCache();
+	if (!appCache) {
+		scheduleInvalidationRetry();
+		return;
+	}
+	// Snapshot then clear: writes that fail again (or new failures merged in
+	// while this batch runs) re-queue via queueInvalidationRetry, newest
+	// timestamp winning.
+	const batch = new Map(pendingInvalidationWrites);
+	pendingInvalidationWrites.clear();
+	const failed = await persistInvalidations(appCache, batch);
+	if (failed.size) {
+		warn(
+			`CacheInvalidation retry failed for [${[...failed.keys()].join(', ')}]; retrying in ${INVALIDATION_PUT_RETRY_MS}ms`
+		);
+		queueInvalidationRetry(failed);
+	} else if (pendingInvalidationWrites.size) {
+		// New failures arrived while this batch was in flight.
+		scheduleInvalidationRetry();
+	}
+}
+
 // Tags are trimmed on the way in so stored cacheTags always match the trimmed
 // keys recordInvalidation() uses.
 function collectTags(data, ctx) {
@@ -276,17 +344,22 @@ module.exports = class CacheHandler {
 			.map((tag) => String(tag).trim())
 			.filter((tag) => tag !== '');
 		const timestamp = Date.now();
+		// The in-memory mirror is updated immediately so this worker's view is
+		// current regardless of whether the DB write has landed yet.
 		for (const tag of tagList) recordInvalidation(tag, timestamp);
-		try {
-			const appCache = getAppCache();
-			if (!appCache) return;
-			for (const tag of tagList) {
-				await appCache.CacheInvalidation.put({ id: tag, timestamp });
-			}
-		} catch (error) {
-			// The invalidation only took effect in this worker's memory; other
-			// workers will serve stale data for these tags until it is persisted.
-			logError(`revalidateTag persistence failed for [${tagList.join(', ')}]; invalidation applied locally only`, error);
+		const appCache = getAppCache();
+		if (!appCache) return;
+		const failed = await persistInvalidations(
+			appCache,
+			tagList.map((tag) => [tag, timestamp])
+		);
+		if (failed.size) {
+			// Until these rows persist, other workers serve stale data for the
+			// failed tags — keep retrying on a backoff like syncInvalidations does.
+			logError(
+				`revalidateTag persistence failed for [${[...failed.keys()].join(', ')}]; applied locally, retrying in ${INVALIDATION_PUT_RETRY_MS}ms`
+			);
+			queueInvalidationRetry(failed);
 		}
 	}
 
