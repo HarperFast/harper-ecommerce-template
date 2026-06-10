@@ -13,6 +13,11 @@
 # actually touched (the `import { tables } from 'harper'` seed logic and the
 # @table @export schema) directly via the Operations API. The Next.js layer is
 # covered by the manual cluster test report in v5-test-results.mdx.
+#
+# The fixture also covers the Next.js 16 Harper-backed incremental cache
+# (issue #5): resources.js loads the REAL repo-root cacheHandler.cjs (copied
+# in by app.test.ts) and exercises it against the appCache tables, recording
+# the outcome in CacheProbe — again without booting the Next plugin.
 graphqlSchema:
   files: '*.graphql'
 jsResource:

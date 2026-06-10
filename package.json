@@ -1,41 +1,42 @@
 {
-  "name": "harper-ecommerce-template",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "HARPER_NEXTJS_MODE=dev harper run .",
-    "build": "HARPER_NEXTJS_MODE=build harper run .",
-    "start": "harper run .",
-    "lint": "next lint",
-    "test:integration": "harper-integration-test-run \"integrationTests/**/*.test.ts\""
-  },
-  "dependencies": {
-    "@harperdb/http-cache": "^1.1.0",
-    "@harperfast/nextjs": "^2.0.0",
-    "@radix-ui/react-dialog": "^1.1.1",
-    "@radix-ui/react-dropdown-menu": "^2.1.1",
-    "@radix-ui/react-select": "^2.1.1",
-    "@radix-ui/react-slider": "^1.2.0",
-    "@radix-ui/react-slot": "^1.1.0",
-    "@radix-ui/react-switch": "^1.1.0",
-    "class-variance-authority": "^0.7.0",
-    "clsx": "^2.1.1",
-    "harper": "^5.0.28",
-    "lucide-react": "^0.525.0",
-    "next": "15.4.11",
-    "openai": "^5.9.1",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "zod": "^3.25.76"
-  },
-  "devDependencies": {
-    "@harperfast/integration-testing": "^0.4.0",
-    "@tailwindcss/postcss": "^4.1.11",
-    "@types/node": "24.0.14",
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
-    "tailwind-merge": "^3.3.1",
-    "typescript": "^5.8.3"
-  },
-  "license": "Apache-2.0"
+	"name": "harper-ecommerce-template",
+	"version": "0.1.0",
+	"private": true,
+	"scripts": {
+		"dev": "HARPER_NEXTJS_MODE=dev harper run .",
+		"build": "HARPER_NEXTJS_MODE=build harper run .",
+		"start": "harper run .",
+		"lint": "next lint",
+		"test:integration": "harper-integration-test-run \"integrationTests/**/*.test.ts\"",
+		"test:unit": "node --test integrationTests/cacheHandler.retry.test.mjs"
+	},
+	"dependencies": {
+		"@harperfast/nextjs": "^2.0.0",
+		"@radix-ui/react-dialog": "^1.1.1",
+		"@radix-ui/react-dropdown-menu": "^2.1.1",
+		"@radix-ui/react-select": "^2.1.1",
+		"@radix-ui/react-slider": "^1.2.0",
+		"@radix-ui/react-slot": "^1.1.0",
+		"@radix-ui/react-switch": "^1.1.0",
+		"class-variance-authority": "^0.7.0",
+		"clsx": "^2.1.1",
+		"harper": "^5.0.28",
+		"lucide-react": "^0.525.0",
+		"next": "^15.5.19",
+		"openai": "^5.9.1",
+		"react": "^19.1.0",
+		"react-dom": "^19.1.0",
+		"zod": "^3.25.76"
+	},
+	"devDependencies": {
+		"@harperdb/code-guidelines": "^0.0.6",
+		"@harperfast/integration-testing": "^0.4.0",
+		"@tailwindcss/postcss": "^4.1.11",
+		"@types/node": "24.0.14",
+		"@types/react": "^19.1.8",
+		"@types/react-dom": "^19.1.6",
+		"tailwind-merge": "^3.3.1",
+		"typescript": "^5.8.3"
+	},
+	"license": "Apache-2.0"
 }

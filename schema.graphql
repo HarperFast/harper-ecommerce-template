@@ -25,3 +25,35 @@ type Traits @table @export {
   id: ID @primaryKey
   traits: [String]
 }
+
+# Next.js Incremental Cache storage (read/written by cacheHandler.cjs).
+# Internal to the cache handler — intentionally not @export-ed.
+type Cache @table(database: "appCache", expiration: 86400) {
+  cacheKey: String @primaryKey
+  kind: String @indexed
+  data: Blob!
+  headers: String
+  cacheTags: String
+  groupCode: String @indexed
+  url: String @indexed
+  refreshedAt: Long @indexed
+}
+
+# Soft-invalidation log: a row with id = <tag | groupCode | path> marks every
+# cache entry refreshed at or before `timestamp` as stale (served as a MISS).
+type CacheInvalidation @table(database: "appCache", expiration: 604800) {
+  id: Any @primaryKey
+  timestamp: Long
+}
+
+# Path-based cache policy, seeded idempotently from resources.js. Lowest
+# `priority` value wins when multiple patterns match a path.
+type CacheRules @table(database: "appCache") {
+  id: ID @primaryKey
+  description: String
+  priority: Int
+  pathPatterns: [String]!
+  groupCode: String
+  bypassCache: Boolean
+  neverExpire: Boolean
+}

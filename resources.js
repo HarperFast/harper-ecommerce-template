@@ -2,7 +2,7 @@
  * BOOTSTRAP
  ***************************************************/
 
-import { tables } from 'harper';
+import { tables, databases } from 'harper';
 import productdata from "./productdata.json" with { type: "json" };
 import { embed, EMBEDDINGS_ENABLED } from './lib/embeddings.js';
 
@@ -22,3 +22,15 @@ for (const product of productdata) {
 // Typically this data would come from a tool like Segment, Optimizely, etc
 const USER_TRAITS = ['sporty', 'likes computers', 'lives near a ski resort'];
 tables.Traits.put({ id: "1", traits: USER_TRAITS});
+
+// Next.js incremental-cache rules, read by cacheHandler.cjs. Lowest priority
+// value wins; put() is keyed by id, so re-seeding on restart is idempotent.
+const CACHE_RULES = [
+	{ id: 'personalized', description: 'Personalized PDP — never cache', priority: 10, pathPatterns: ['^/products/[^/]+/personalized$'], bypassCache: true },
+	{ id: 'pdp', description: 'Product detail', priority: 20, pathPatterns: ['^/products/[^/]+$'], groupCode: 'pdp' },
+	{ id: 'listing', description: 'Products listing', priority: 30, pathPatterns: ['^/products$'], groupCode: 'listing' },
+	{ id: 'home', description: 'Home', priority: 40, pathPatterns: ['^/$'], groupCode: 'home' },
+];
+for (const rule of CACHE_RULES) {
+	databases.appCache.CacheRules.put(rule);
+}
