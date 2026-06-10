@@ -320,8 +320,6 @@ module.exports = class CacheHandler {
 			const rule = await matchRule(appCache, cacheKey);
 			if (rule?.bypassCache) return null;
 			const entry = await appCache.Cache.get(cacheKey);
-			// DB responded — reset the persistent-failure counter.
-			consecutiveGetFailures = 0;
 			if (!entry) return null;
 			const refreshedAt = entry.refreshedAt ?? 0;
 			let tags = [];
@@ -335,6 +333,8 @@ module.exports = class CacheHandler {
 			const buffer = await toBuffer(entry.data);
 			if (!buffer) return null;
 			const value = v8.deserialize(buffer);
+			// Full pipeline succeeded — reset the persistent-failure counter.
+			consecutiveGetFailures = 0;
 			return { value, lastModified: refreshedAt };
 		} catch (error) {
 			// Degrade to MISS. Escalate log level for persistent failures so a

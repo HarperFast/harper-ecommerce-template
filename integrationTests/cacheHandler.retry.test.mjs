@@ -120,7 +120,7 @@ test('concurrent failures are all retried, not just the last one', async (t) => 
 	assert.ok(!retried.has('pdp'), 'pdp was not retried (already succeeded)');
 });
 
-test('get() escalates to warn then error after consecutive DB failures, and resets on success', async (t) => {
+test('get() escalates log level for persistent failures; corrupt blobs also increment the counter; resets only after full success', async (t) => {
 	const logs = { trace: [], warn: [], error: [] };
 	globalThis.logger = {
 		trace: (m) => logs.trace.push(m),
@@ -129,11 +129,16 @@ test('get() escalates to warn then error after consecutive DB failures, and rese
 	};
 	t.after(() => { delete globalThis.logger; delete globalThis.databases; });
 
-	let throwOnGet = true;
+	let mode = 'db-fail'; // 'db-fail' | 'corrupt-blob' | 'hit'
+	const corruptBlob = Buffer.from([0xff, 0xfe, 0xfd]); // not valid v8 data
+	const validBlob = v8.serialize({ kind: 'APP_PAGE', html: 'ok' });
+
 	const mockCache = {
 		get: async () => {
-			if (throwOnGet) throw new Error('DB down');
-			return null; // successful DB response, cache miss
+			if (mode === 'db-fail') throw new Error('DB down');
+			if (mode === 'corrupt-blob') return { data: corruptBlob, cacheTags: null, refreshedAt: 1, groupCode: null, url: null };
+			// 'hit': returns a valid entry so the full pipeline (including deserialization) succeeds
+			return { data: validBlob, cacheTags: null, refreshedAt: 1, groupCode: null, url: null };
 		},
 		put: async () => {},
 		delete: async () => {},
@@ -144,31 +149,39 @@ test('get() escalates to warn then error after consecutive DB failures, and rese
 	const CacheHandler = freshModule();
 	const handler = new CacheHandler({});
 
-	// First 4 failures — should all be trace.
+	// Drive 4 DB failures — trace only.
 	for (let i = 0; i < 4; i++) await handler.get(`/products/${i}`);
 	assert.equal(logs.warn.length, 0, 'no warn before threshold');
 	assert.ok(logs.trace.some((m) => m.includes('degraded to MISS')), 'trace logged for early failures');
 
 	// 5th failure — warn threshold.
 	await handler.get('/products/5');
-	assert.ok(logs.warn.some((m) => m.includes('consecutive failures')), 'warn logged at threshold');
+	assert.ok(logs.warn.some((m) => m.includes('consecutive failures')), 'warn at threshold');
 	assert.equal(logs.error.length, 0, 'no error yet');
 
 	// Drive to the error threshold (20 total).
 	for (let i = 6; i <= 20; i++) await handler.get(`/products/${i}`);
-	assert.ok(logs.error.some((m) => m.includes('cache outage')), 'error logged at high threshold');
+	assert.ok(logs.error.some((m) => m.includes('cache outage')), 'error at high threshold');
 
-	// DB recovers — one successful response resets the counter.
-	throwOnGet = false;
+	// Corrupt blob: DB responds but deserialization fails — counter must still increment
+	// (not reset on a partial success). This would silently plateau at trace if the
+	// reset fired after Cache.get() rather than after full deserialization success.
+	mode = 'corrupt-blob';
+	const errorCountMid = logs.error.length;
+	await handler.get('/products/corrupt');
+	assert.ok(logs.error.length > errorCountMid, 'corrupt blob still increments the counter and logs at error level');
+
+	// Full success (real hit + deserialization): counter resets.
+	mode = 'hit';
 	await handler.get('/products/recover');
-	throwOnGet = true;
+	mode = 'db-fail';
 
-	// Next failure should be back at trace level (counter was reset).
+	// Next failure should be back at trace level (counter was reset to 0).
 	const warnCountBefore = logs.warn.length;
 	const errorCountBefore = logs.error.length;
 	await handler.get('/products/after-reset');
-	assert.equal(logs.warn.length, warnCountBefore, 'no new warn after reset — counter restarted');
-	assert.equal(logs.error.length, errorCountBefore, 'no new error after reset — counter restarted');
+	assert.equal(logs.warn.length, warnCountBefore, 'no new warn — counter restarted after full success');
+	assert.equal(logs.error.length, errorCountBefore, 'no new error — counter restarted after full success');
 });
 
 test('subscription events with missing/non-numeric timestamps are ignored; valid timestamps are applied', async (t) => {
