@@ -11,6 +11,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import v8 from 'node:v8';
+import { EventEmitter } from 'node:events';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const _require = createRequire(import.meta.url);
@@ -117,6 +118,51 @@ test('concurrent failures are all retried, not just the last one', async (t) => 
 	assert.ok(retried.has('home'), 'home retried');
 	assert.ok(retried.has('listing'), 'listing retried');
 	assert.ok(!retried.has('pdp'), 'pdp was not retried (already succeeded)');
+});
+
+test('subscription events with missing/non-numeric timestamps are ignored; valid timestamps are applied', async (t) => {
+	const emitter = new EventEmitter();
+	const warnings = [];
+
+	// Patch globalThis.logger so warn() calls are captured.
+	globalThis.logger = { warn: (msg) => warnings.push(msg), trace: () => {}, error: () => {} };
+	t.after(() => { delete globalThis.logger; delete globalThis.databases; });
+
+	const payload = v8.serialize({ kind: 'APP_PAGE', html: 'hello' });
+
+	globalThis.databases = {
+		appCache: {
+			...baseAppCache({ subscribe: async () => emitter }),
+			Cache: {
+				get: async (key) =>
+					key === '/products/1'
+						? { data: payload, cacheTags: JSON.stringify(['sale']), refreshedAt: 100, groupCode: null, url: '/products/1' }
+						: null,
+				put: async () => {},
+				delete: async () => {},
+			},
+		},
+	};
+
+	const CacheHandler = freshModule();
+	const handler = new CacheHandler({});
+	await handler.get('/warmup'); // trigger init + subscription
+
+	// Emit a 'data' event with no timestamp — should be ignored.
+	emitter.emit('data', { id: 'sale', value: {} });
+	await new Promise((r) => setImmediate(r));
+
+	// Entry has refreshedAt=100; invalidation was ignored so it should be a HIT.
+	const hitResult = await handler.get('/products/1');
+	assert.notEqual(hitResult, null, 'entry is served; malformed event was not applied');
+	assert.ok(warnings.some((w) => w.includes('sale')), 'warn logged for malformed event');
+
+	// Emit a valid event at timestamp=200 (after refreshedAt=100) — should invalidate.
+	emitter.emit('data', { id: 'sale', value: { timestamp: 200 } });
+	await new Promise((r) => setImmediate(r));
+
+	const missResult = await handler.get('/products/1');
+	assert.equal(missResult, null, 'entry is now invalidated by valid subscription event');
 });
 
 test('invalidationTimes entries older than 7 days are evicted by the hourly timer', async (t) => {
