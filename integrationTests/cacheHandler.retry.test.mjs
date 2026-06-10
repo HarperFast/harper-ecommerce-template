@@ -120,6 +120,44 @@ test('concurrent failures are all retried, not just the last one', async (t) => 
 	assert.ok(!retried.has('pdp'), 'pdp was not retried (already succeeded)');
 });
 
+test('get() escalates to warn then error after consecutive DB failures', async (t) => {
+	const logs = { trace: [], warn: [], error: [] };
+	globalThis.logger = {
+		trace: (m) => logs.trace.push(m),
+		warn: (m) => logs.warn.push(m),
+		error: (m) => logs.error.push(m),
+	};
+	t.after(() => { delete globalThis.logger; delete globalThis.databases; });
+
+	globalThis.databases = {
+		appCache: {
+			...baseAppCache(),
+			Cache: {
+				get: async () => { throw new Error('DB down'); },
+				put: async () => {},
+				delete: async () => {},
+			},
+		},
+	};
+
+	const CacheHandler = freshModule();
+	const handler = new CacheHandler({});
+
+	// First 4 failures — should all be trace.
+	for (let i = 0; i < 4; i++) await handler.get(`/products/${i}`);
+	assert.equal(logs.warn.length, 0, 'no warn before threshold');
+	assert.ok(logs.trace.some((m) => m.includes('degraded to MISS')), 'trace logged for early failures');
+
+	// 5th failure — warn threshold.
+	await handler.get('/products/5');
+	assert.ok(logs.warn.some((m) => m.includes('consecutive failures')), 'warn logged at threshold');
+	assert.equal(logs.error.length, 0, 'no error yet');
+
+	// Drive to the error threshold (20 total).
+	for (let i = 6; i <= 20; i++) await handler.get(`/products/${i}`);
+	assert.ok(logs.error.some((m) => m.includes('cache outage')), 'error logged at high threshold');
+});
+
 test('subscription events with missing/non-numeric timestamps are ignored; valid timestamps are applied', async (t) => {
 	const emitter = new EventEmitter();
 	const warnings = [];

@@ -27,6 +27,10 @@ const INVALIDATION_PUT_RETRY_MS = 5_000;
 // Must match the CacheInvalidation table's `expiration: 604800` (seconds → ms).
 const INVALIDATION_TTL_MS = 604_800_000;
 const INVALIDATION_EVICT_INTERVAL_MS = 3_600_000; // check once per hour
+// Thresholds for escalating get() failure log level so a cache outage (DB down,
+// schema missing, etc.) surfaces in production logs rather than staying silent.
+const GET_WARN_THRESHOLD = 5;
+const GET_ERROR_THRESHOLD = 20;
 
 // Module-level state so every CacheHandler instance in this worker shares one
 // rules cache, one invalidation mirror, and one table subscription.
@@ -39,6 +43,7 @@ let rulesPromise = null;
 let rulesLoadedAt = 0;
 let initializationPromise = null;
 let evictionStarted = false;
+let consecutiveGetFailures = 0;
 
 function getAppCache() {
 	return globalThis.databases ? globalThis.databases.appCache : undefined;
@@ -315,6 +320,8 @@ module.exports = class CacheHandler {
 			const rule = await matchRule(appCache, cacheKey);
 			if (rule?.bypassCache) return null;
 			const entry = await appCache.Cache.get(cacheKey);
+			// DB responded — reset the persistent-failure counter.
+			consecutiveGetFailures = 0;
 			if (!entry) return null;
 			const refreshedAt = entry.refreshedAt ?? 0;
 			let tags = [];
@@ -330,8 +337,16 @@ module.exports = class CacheHandler {
 			const value = v8.deserialize(buffer);
 			return { value, lastModified: refreshedAt };
 		} catch (error) {
-			// Degrade to MISS; trace only so render paths never depend on the cache.
-			trace(`get(${cacheKey}) degraded to MISS`, error);
+			// Degrade to MISS. Escalate log level for persistent failures so a
+			// cache outage (DB down, schema missing) is visible in production logs.
+			consecutiveGetFailures++;
+			if (consecutiveGetFailures >= GET_ERROR_THRESHOLD) {
+				logError(`get(${cacheKey}) degraded to MISS (${consecutiveGetFailures} consecutive failures — possible cache outage)`, error);
+			} else if (consecutiveGetFailures >= GET_WARN_THRESHOLD) {
+				warn(`get(${cacheKey}) degraded to MISS (${consecutiveGetFailures} consecutive failures)`, error);
+			} else {
+				trace(`get(${cacheKey}) degraded to MISS`, error);
+			}
 			return null;
 		}
 	}
