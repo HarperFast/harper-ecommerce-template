@@ -92,9 +92,88 @@ test('product detail validation guard rejects missing and malformed records', as
 	);
 	const { price: _price, ...withoutPrice } = validProduct;
 	assert.equal(isValidProduct(withoutPrice), false, 'missing price must be rejected');
+	assert.equal(
+		isValidProduct({ ...validProduct, price: 'free' }),
+		false,
+		'non-numeric price must be rejected'
+	);
+	assert.equal(isValidProduct({ ...validProduct, price: -1 }), false, 'negative price must be rejected');
+	assert.equal(
+		isValidProduct({ ...validProduct, specs: [] }),
+		false,
+		'array specs must be rejected (Object.entries on an array yields numeric string keys)'
+	);
+	assert.equal(isValidProduct({ ...validProduct, specs: null }), false, 'null specs must be rejected');
 
 	assert.equal(isValidProduct(validProduct), true, 'a well-formed product record must be accepted');
 	assert.equal(isValidProduct({ ...validProduct, price: 0 }), true, 'price of 0 is a valid price');
+});
+
+test('products listing filter/sort logic filters by category, price range, and sort order', async () => {
+	const { filterProducts } = await import(
+		pathToFileURL(path.join(ROOT, 'app', 'products', 'filter-products.mjs')).href
+	);
+
+	const products = [
+		{ id: 'a', name: 'Headphones', category: 'Electronics', price: 200 },
+		{ id: 'b', name: 'Cable', category: 'Accessories', price: 15 },
+		{ id: 'c', name: 'Speaker', category: 'Electronics', price: 90 },
+		{ id: 'd', name: 'Case', category: 'Accessories', price: 40 },
+	];
+
+	const all = filterProducts(products, { category: 'all', priceRange: [0, 300], sortBy: 'featured' });
+	assert.deepEqual(
+		all.map((product) => product.id),
+		['a', 'b', 'c', 'd'],
+		'featured sort must preserve the original order'
+	);
+	assert.notEqual(all, products, 'filterProducts must return a new array, not mutate the input');
+
+	const electronics = filterProducts(products, { category: 'Electronics', priceRange: [0, 300], sortBy: 'featured' });
+	assert.deepEqual(
+		electronics.map((product) => product.id),
+		['a', 'c'],
+		'category filter must keep only matching products'
+	);
+
+	const midRange = filterProducts(products, { category: 'all', priceRange: [20, 100], sortBy: 'featured' });
+	assert.deepEqual(
+		midRange.map((product) => product.id),
+		['c', 'd'],
+		'price range filter must be inclusive of bounds and exclude products outside the range'
+	);
+
+	const ascending = filterProducts(products, { category: 'all', priceRange: [0, 300], sortBy: 'price-asc' });
+	assert.deepEqual(
+		ascending.map((product) => product.price),
+		[15, 40, 90, 200],
+		'price-asc must sort cheapest first'
+	);
+
+	const descending = filterProducts(products, { category: 'all', priceRange: [0, 300], sortBy: 'price-desc' });
+	assert.deepEqual(
+		descending.map((product) => product.price),
+		[200, 90, 40, 15],
+		'price-desc must sort most expensive first'
+	);
+
+	const none = filterProducts(products, { category: 'Electronics', priceRange: [0, 10], sortBy: 'featured' });
+	assert.deepEqual(none, [], 'no matches must yield an empty array');
+});
+
+test('products-browser.js uses the shared filterProducts helper', async () => {
+	const { readFileSync } = await import('node:fs');
+	const source = readFileSync(path.join(ROOT, 'app', 'products', 'products-browser.js'), 'utf8');
+	assert.match(
+		source,
+		/import\s*\{\s*filterProducts\s*\}\s*from\s*["']\.\/filter-products\.mjs["']/,
+		'products-browser.js must import filterProducts from filter-products.mjs'
+	);
+	assert.match(
+		source,
+		/filterProducts\(initialProducts,\s*\{\s*category,\s*priceRange,\s*sortBy\s*\}\)/,
+		'products-browser.js must delegate filtering/sorting to filterProducts'
+	);
 });
 
 test('product detail page.js uses the shared validation predicate', async () => {

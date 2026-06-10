@@ -12,6 +12,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import Link from "next/link";
 import { useState } from "react";
+import { filterProducts } from "./filter-products.mjs";
 
 // Interactive listing UI (filter/sort), seeded with server-rendered products
 // so the initial HTML already contains the product grid.
@@ -20,18 +21,8 @@ export default function ProductsBrowser({ initialProducts = [] }) {
   const [priceRange, setPriceRange] = useState([0, 300]);
   const [sortBy, setSortBy] = useState("featured");
 
-  // Filter and sort products
-  const filteredProducts = initialProducts
-    .filter((product) =>
-      (category === "all" || product.category === category) &&
-      product.price >= priceRange[0] &&
-      product.price <= priceRange[1]
-    )
-    .sort((a, b) => {
-      if (sortBy === "price-asc") return a.price - b.price;
-      if (sortBy === "price-desc") return b.price - a.price;
-      return 0; // featured
-    });
+  // Filter and sort products (logic lives in filter-products.mjs so it is unit-testable)
+  const filteredProducts = filterProducts(initialProducts, { category, priceRange, sortBy });
 
   return (
     <div className="container mx-auto px-4 py-8">

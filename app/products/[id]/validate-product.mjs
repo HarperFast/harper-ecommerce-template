@@ -11,9 +11,11 @@ export function isValidProduct(product) {
 	return Boolean(
 		product &&
 			product.name &&
-			product.price != null &&
+			typeof product.price === 'number' &&
+			product.price >= 0 &&
 			Array.isArray(product.features) &&
-			product.specs &&
-			typeof product.specs === 'object'
+			product.specs !== null &&
+			typeof product.specs === 'object' &&
+			!Array.isArray(product.specs)
 	);
 }
