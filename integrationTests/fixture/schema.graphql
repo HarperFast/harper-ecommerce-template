@@ -59,5 +59,7 @@ type CacheProbe @table {
   ok: Boolean
   bypassRespected: Boolean
   invalidationMiss: Boolean
+  singleRulesLoad: Boolean
+  trimmedInvalidationMiss: Boolean
   detail: String
 }
