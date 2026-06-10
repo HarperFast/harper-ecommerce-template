@@ -22,6 +22,7 @@
 const v8 = require('node:v8');
 
 const CACHE_RULES_REFRESH_MS = 30_000;
+const INVALIDATION_RESYNC_MS = 30_000;
 
 // Module-level state so every CacheHandler instance in this worker shares one
 // rules cache, one invalidation mirror, and one table subscription.
@@ -34,12 +35,26 @@ function getAppCache() {
 	return globalThis.databases ? globalThis.databases.appCache : undefined;
 }
 
-function trace(message, error) {
+function logAt(level, message, error) {
 	const logger = globalThis.logger;
-	if (logger && typeof logger.trace === 'function') {
+	if (logger && typeof logger[level] === 'function') {
 		// Key/rule names only — never cache payloads or headers.
-		logger.trace(`cacheHandler: ${message}${error ? `: ${error.message}` : ''}`);
+		logger[level](`cacheHandler: ${message}${error ? `: ${error.message}` : ''}`);
 	}
+}
+
+function trace(message, error) {
+	logAt('trace', message, error);
+}
+
+// Cache-coherency failures (lost invalidations, dead subscriptions) must be
+// visible in production logs — other workers serve stale data until resolved.
+function warn(message, error) {
+	logAt('warn', message, error);
+}
+
+function logError(message, error) {
+	logAt('error', message, error);
 }
 
 // Harper 5 Blob! columns are returned as FileBackedBlob with async byte
@@ -138,31 +153,44 @@ function isInvalidated(keys, refreshedAt) {
 }
 
 // Load the persisted invalidation log into the in-memory mirror, then keep it
-// current across workers by subscribing to CacheInvalidation changes.
+// current across workers by subscribing to CacheInvalidation changes. On
+// subscribe failure, retry the full sync (preload + subscribe) after a delay so
+// invalidations written by other workers while unsubscribed are eventually
+// picked up, even if the real-time subscription keeps failing.
+async function syncInvalidations(appCache) {
+	try {
+		for await (const record of appCache.CacheInvalidation.search()) {
+			recordInvalidation(record.id, record.timestamp ?? 0);
+		}
+	} catch (error) {
+		warn('CacheInvalidation preload failed; invalidations from other workers may be missed', error);
+	}
+	try {
+		const subscription = await appCache.CacheInvalidation.subscribe({ omitCurrent: true });
+		subscription.on('data', (event) => {
+			if (event?.id == null) return;
+			recordInvalidation(event.id, event.value?.timestamp ?? Date.now());
+		});
+		subscription.on('error', (error) => {
+			warn('CacheInvalidation subscription error; cross-worker invalidations may be delayed', error);
+		});
+	} catch (error) {
+		warn(
+			`CacheInvalidation subscription unavailable; retrying in ${INVALIDATION_RESYNC_MS}ms (cross-worker invalidations not visible until then)`,
+			error
+		);
+		const timer = setTimeout(() => {
+			void syncInvalidations(appCache);
+		}, INVALIDATION_RESYNC_MS);
+		// Never hold the process open just for the resync loop.
+		if (typeof timer.unref === 'function') timer.unref();
+	}
+}
+
 function ensureInitialized(appCache) {
 	if (initialized) return;
 	initialized = true;
-	(async () => {
-		try {
-			for await (const record of appCache.CacheInvalidation.search()) {
-				recordInvalidation(record.id, record.timestamp ?? 0);
-			}
-		} catch (error) {
-			trace('CacheInvalidation preload failed', error);
-		}
-		try {
-			const subscription = await appCache.CacheInvalidation.subscribe({ omitCurrent: true });
-			subscription.on('data', (event) => {
-				if (event?.id == null) return;
-				recordInvalidation(event.id, event.value?.timestamp ?? Date.now());
-			});
-			subscription.on('error', (error) => {
-				trace('CacheInvalidation subscription error; using local invalidations only', error);
-			});
-		} catch (error) {
-			trace('CacheInvalidation subscription unavailable; using local invalidations only', error);
-		}
-	})();
+	void syncInvalidations(appCache);
 }
 
 // Tags are trimmed on the way in so stored cacheTags always match the trimmed
@@ -256,7 +284,9 @@ module.exports = class CacheHandler {
 				await appCache.CacheInvalidation.put({ id: tag, timestamp });
 			}
 		} catch (error) {
-			trace('revalidateTag persistence failed; invalidation applied locally', error);
+			// The invalidation only took effect in this worker's memory; other
+			// workers will serve stale data for these tags until it is persisted.
+			logError(`revalidateTag persistence failed for [${tagList.join(', ')}]; invalidation applied locally only`, error);
 		}
 	}
 
