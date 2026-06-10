@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+.claude
+update-plan.md
+
 # dependencies
 /node_modules
 /.pnp
@@ -7,8 +10,6 @@
 
 # testing
 /coverage
-# copied from the repo root by integrationTests/app.test.ts before boot
-/integrationTests/fixture/cacheHandler.cjs
 
 # next.js
 /.next/
