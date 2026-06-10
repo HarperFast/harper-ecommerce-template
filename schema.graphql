@@ -15,6 +15,10 @@ type Product @table @export {
   description: String
   features: [String]
   specs: Specs
+  # Semantic-search vector. Populated at seed time when an embedding provider
+  # (OPENAI_API_KEY) is configured; see lib/embeddings.js. Harper indexes and
+  # searches it natively with HNSW, replacing the external search service.
+  embedding: [Float] @indexed(type: "HNSW", distance: "cosine")
 }
 
 type Traits @table @export {

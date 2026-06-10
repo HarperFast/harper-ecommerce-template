@@ -12,13 +12,12 @@ export function SiteHeader() {
   const [searchResults, setSearchResults] = useState([]);
 
   function search(e) {
-    // TODO: could debounce for optimization
-    searchProducts(e.target.value)
-      .then(res => {
-        if (res?.hits) {
-          setSearchResults(res.hits);
-        }
-      });
+    const target = e.target;
+    clearTimeout(target.searchTimeout);
+    target.searchTimeout = setTimeout(() => {
+      searchProducts(target.value)
+        .then(res => setSearchResults(Array.isArray(res) ? res : []));
+    }, 300);
   }
 
   return (

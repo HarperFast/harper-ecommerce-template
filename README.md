@@ -14,10 +14,12 @@ Almost 2% of global ecommerce sales flow through Harper Systems, with an average
 - View the frontend at [localhost:9926](http://localhost:9926/)
 - View the data in Harper Studio UI at [localhost:9925](http://localhost:9925/)
 
-## Optional Config: Algolia Search & OpenAI Customized Product Description
+## Optional Config: OpenAI personalization & semantic search
 - Run `cp .env.template .env`
-- Get keys from Algolia and / or OpenAI and add to the .env file
+- Add an `OPENAI_API_KEY` to the `.env` file
 - Restart the application
+
+With a key set, product descriptions are personalized to user traits, and product search becomes semantic: queries are embedded and matched against an HNSW vector index built directly into Harper, with no external search service. Without a key, search falls back to a Harper keyword match. Built-in [Fabric embeddings are coming](https://github.com/HarperFast/harper/issues/510), which will remove the external embedding call entirely.
 
 ## More Information
 For more information about getting started with Harper and building your Next.js applications, see our [getting started guides and documentation](https://www.harperdb.io/development/technologies/next-js).

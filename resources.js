@@ -4,8 +4,16 @@
 
 import { tables } from 'harper';
 import productdata from "./productdata.json" with { type: "json" };
+import { embed, EMBEDDINGS_ENABLED } from './lib/embeddings.js';
 
 // product table seed data
+if (EMBEDDINGS_ENABLED) {
+	await Promise.all(
+		productdata.map(async (product) => {
+			product.embedding = await embed(`${product.name}. ${product.description}`);
+		})
+	);
+}
 for (const product of productdata) {
 	tables.Product.put(product);
 }
