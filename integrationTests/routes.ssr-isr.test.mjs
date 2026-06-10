@@ -56,3 +56,58 @@ test('product detail route exports revalidate = 60 and dynamicParams = true for 
 	assert.equal(config.dynamicParams, true, 'PDP must render unknown ids on demand');
 	assert.ok(!('generateStaticParams' in config), 'PDP config must not reintroduce build-time prerendering');
 });
+
+test('product detail validation guard rejects missing and malformed records', async () => {
+	const { isValidProduct } = await import(
+		pathToFileURL(path.join(ROOT, 'app', 'products', '[id]', 'validate-product.mjs')).href
+	);
+
+	const validProduct = {
+		name: 'Trail Runner X',
+		price: 129.99,
+		description: 'Lightweight trail running shoe',
+		image: '/images/trail-runner-x.jpg',
+		category: 'footwear',
+		features: ['breathable mesh', 'rock plate'],
+		specs: { weight: '280g', drop: '6mm' },
+	};
+
+	assert.equal(isValidProduct(null), false, 'null (unknown id) must be rejected');
+	assert.equal(isValidProduct({}), false, 'empty object must be rejected');
+	const { name: _name, ...withoutName } = validProduct;
+	assert.equal(isValidProduct(withoutName), false, 'missing name must be rejected');
+	const { features: _features, ...withoutFeatures } = validProduct;
+	assert.equal(isValidProduct(withoutFeatures), false, 'missing features must be rejected');
+	assert.equal(
+		isValidProduct({ ...validProduct, features: 'not-an-array' }),
+		false,
+		'non-array features must be rejected (ProductPage calls features.map)'
+	);
+	const { specs: _specs, ...withoutSpecs } = validProduct;
+	assert.equal(isValidProduct(withoutSpecs), false, 'missing specs must be rejected');
+	assert.equal(
+		isValidProduct({ ...validProduct, specs: 'not-an-object' }),
+		false,
+		'non-object specs must be rejected (ProductPage calls Object.entries(specs))'
+	);
+	const { price: _price, ...withoutPrice } = validProduct;
+	assert.equal(isValidProduct(withoutPrice), false, 'missing price must be rejected');
+
+	assert.equal(isValidProduct(validProduct), true, 'a well-formed product record must be accepted');
+	assert.equal(isValidProduct({ ...validProduct, price: 0 }), true, 'price of 0 is a valid price');
+});
+
+test('product detail page.js uses the shared validation predicate', async () => {
+	const { readFileSync } = await import('node:fs');
+	const source = readFileSync(path.join(ROOT, 'app', 'products', '[id]', 'page.js'), 'utf8');
+	assert.match(
+		source,
+		/import\s*\{\s*isValidProduct\s*\}\s*from\s*'\.\/validate-product\.mjs'/,
+		'page.js must import isValidProduct from validate-product.mjs'
+	);
+	assert.match(
+		source,
+		/if\s*\(\s*!isValidProduct\(product\)\s*\)\s*\{\s*\n\s*notFound\(\);/,
+		'page.js must call notFound() when isValidProduct(product) is false'
+	);
+});
