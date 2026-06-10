@@ -1,9 +1,9 @@
 import { listProducts } from "@/app/actions";
 import ProductsBrowser from "./products-browser";
 
-// ISR: server-render the listing (product grid in the initial HTML), cache it
-// via the Harper cache handler, and regenerate at most every 60 seconds.
-export const revalidate = 60;
+// ISR segment config (revalidate) lives in route-config.mjs so unit tests can
+// import the real production value without needing a JSX/Harper environment.
+export { revalidate } from "./route-config.mjs";
 
 export default async function ProductsPage() {
   const products = JSON.parse(await listProducts());

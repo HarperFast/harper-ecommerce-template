@@ -3,11 +3,9 @@ import { notFound } from 'next/navigation';
 import ProductPage from './product-page';
 import { getProduct } from '@/app/actions';
 
-// On-demand ISR: no build-time prerender of every product (which contended
-// for the database lock); each product renders on first request and is cached
-// via the Harper cache handler for up to 60 seconds.
-export const revalidate = 60;
-export const dynamicParams = true;
+// ISR segment config (revalidate, dynamicParams) lives in route-config.mjs so
+// unit tests can import the real production values without JSX/Harper.
+export { revalidate, dynamicParams } from './route-config.mjs';
 
 export default async function Page({ params }) {
   const { id } = await params;
