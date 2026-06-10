@@ -8,6 +8,7 @@ const nextConfig = {
 	eslint: { ignoreDuringBuilds: true },
 	images: { unoptimized: true },
 	cacheHandler: CACHE_HANDLER_PATH,
+	cacheMaxMemorySize: 0,
 };
 
 module.exports = withHarper(nextConfig);
