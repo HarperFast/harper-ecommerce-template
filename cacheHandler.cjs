@@ -34,7 +34,7 @@ const pendingInvalidationWrites = new Map();
 let invalidationRetryTimer = null;
 let rulesPromise = null;
 let rulesLoadedAt = 0;
-let initialized = false;
+let initializationPromise = null;
 
 function getAppCache() {
 	return globalThis.databases ? globalThis.databases.appCache : undefined;
@@ -193,9 +193,10 @@ async function syncInvalidations(appCache) {
 }
 
 function ensureInitialized(appCache) {
-	if (initialized) return;
-	initialized = true;
-	void syncInvalidations(appCache);
+	if (!initializationPromise) {
+		initializationPromise = syncInvalidations(appCache);
+	}
+	return initializationPromise;
 }
 
 // Write each invalidation row individually so one failing tag never abandons
@@ -285,7 +286,7 @@ module.exports = class CacheHandler {
 		try {
 			const appCache = getAppCache();
 			if (!appCache) return null;
-			ensureInitialized(appCache);
+			await ensureInitialized(appCache);
 			const rule = await matchRule(appCache, cacheKey);
 			if (rule?.bypassCache) return null;
 			const entry = await appCache.Cache.get(cacheKey);
@@ -314,7 +315,7 @@ module.exports = class CacheHandler {
 		try {
 			const appCache = getAppCache();
 			if (!appCache) return;
-			ensureInitialized(appCache);
+			await ensureInitialized(appCache);
 			if (data == null) {
 				await appCache.Cache.delete(cacheKey);
 				return;
