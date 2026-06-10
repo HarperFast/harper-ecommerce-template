@@ -1,12 +1,13 @@
 'use server';
-import { tables } from 'harperdb';
+import { tables } from 'harper';
 const { Product } = tables;
-import { initAlgolia, initOpenai } from '@/lib/utils';
+import { initOpenai } from '@/lib/utils';
+import { embed, EMBEDDINGS_ENABLED } from '@/lib/embeddings';
 
 // Harper DB Server Actions
 export async function listProducts(conditions = {}) {
 	const products = [];
-  const results = Product.search(conditions);
+	const results = Product.search(conditions);
 	for await (const product of results) {
 		products.push(product);
 	}
@@ -26,17 +27,43 @@ export async function updateUserTraits(id = "1", traits) {
 	return 'successfully updated Traits table';
 }
 
-// Algolia Search Server Actions
-const algoliaClient = initAlgolia();
-export async function searchProducts(searchTerm = ''){
-	if (algoliaClient) {
-		return await algoliaClient.searchSingleIndex({
-			indexName: 'productdata',
-			searchParams: { query: searchTerm },
-		});
+// Search Server Action (Harper-native)
+//
+// Semantic search when an embedding provider is configured: embed the query and
+// run an HNSW nearest-neighbor search over the products, ranked by similarity.
+// Falls back to a Harper keyword match otherwise, so search works with no keys
+// and no external search service.
+export async function searchProducts(searchTerm = '') {
+	const term = searchTerm.trim();
+	if (!term) return [];
+
+	let query;
+	if (EMBEDDINGS_ENABLED) {
+		try {
+			const embedding = await embed(term);
+			if (embedding) {
+				query = {
+					select: ['id', 'name', 'category', 'price', 'image', 'description', '$distance'],
+					sort: { attribute: 'embedding', target: embedding },
+					limit: 8,
+				};
+			}
+		} catch (error) {
+			console.error('Embedding failed, falling back to keyword search:', error);
+		}
 	}
-	// TODO: return harperdb graphql query
-	return [];
+	if (!query) {
+		query = {
+			conditions: [{ attribute: 'name', comparator: 'contains', value: term }],
+			limit: 8,
+		};
+	}
+
+	const results = [];
+	for await (const product of Product.search(query)) {
+		results.push(product);
+	}
+	return results;
 }
 
 // OpenAI Server Actions

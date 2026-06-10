@@ -1,13 +1,9 @@
+const { withHarper } = require('@harperfast/nextjs');
+
 const nextConfig = {
 	reactStrictMode: false,
-  eslint: { ignoreDuringBuilds: true, },
-  images: { unoptimized: true },
-  webpack: (config) => {
-		config.externals.push({
-			harperdb: 'commonjs harperdb',
-		});
-		return config;
-	},
+	eslint: { ignoreDuringBuilds: true, },
+	images: { unoptimized: true },
 };
 
-module.exports = nextConfig;
+module.exports = withHarper(nextConfig);
