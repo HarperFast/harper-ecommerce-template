@@ -1,0 +1,163 @@
+/**
+ * Unit tests for cacheHandler.cjs — retry and eviction logic.
+ *
+ * These run with Node's built-in test runner (node --test) and do not require
+ * a running Harper instance. Each test loads a fresh copy of the module to
+ * reset module-level state (invalidationTimes, pendingInvalidationWrites, etc.)
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import v8 from 'node:v8';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const _require = createRequire(import.meta.url);
+const HANDLER_PATH = path.join(__dirname, '..', 'cacheHandler.cjs');
+
+function freshModule() {
+	delete _require.cache[_require.resolve(HANDLER_PATH)];
+	return _require(HANDLER_PATH);
+}
+
+function baseAppCache(overrides = {}) {
+	return {
+		Cache: { get: async () => null, put: async () => {}, delete: async () => {} },
+		CacheRules: { search: async function* () {} },
+		CacheInvalidation: {
+			search: async function* () {},
+			subscribe: async () => ({ on: () => {} }),
+			put: async () => {},
+			...overrides,
+		},
+	};
+}
+
+test('revalidateTag retries CacheInvalidation.put failures after the backoff delay', async (t) => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+
+	const puts = [];
+	let failOnce = true;
+
+	globalThis.databases = {
+		appCache: baseAppCache({
+			put: async ({ id }) => {
+				puts.push(id);
+				if (failOnce) {
+					failOnce = false;
+					throw new Error('simulated DB failure');
+				}
+			},
+		}),
+	};
+	t.after(() => { delete globalThis.databases; });
+
+	const CacheHandler = freshModule();
+	const handler = new CacheHandler({});
+
+	// Trigger initialization (preloads empty CacheInvalidation table).
+	await handler.get('/warmup');
+	puts.length = 0;
+
+	// revalidateTag: the put fails on the first attempt.
+	failOnce = true;
+	await handler.revalidateTag('pdp');
+
+	assert.equal(puts.length, 1, 'first put was attempted');
+	assert.equal(puts[0], 'pdp');
+
+	// Advance past INVALIDATION_PUT_RETRY_MS (5 000 ms) to fire the retry timer.
+	t.mock.timers.tick(5001);
+	// Let the async retry batch complete (two ticks: one for the promise
+	// microtask queue inside retryPendingInvalidations, one for safety).
+	await new Promise((r) => setImmediate(r));
+	await new Promise((r) => setImmediate(r));
+
+	assert.equal(puts.length, 2, 'retry fired after backoff');
+	assert.equal(puts[1], 'pdp', 'retry used the correct tag');
+});
+
+test('concurrent failures are all retried, not just the last one', async (t) => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+
+	const puts = [];
+	const failTags = new Set(['home', 'listing']);
+
+	globalThis.databases = {
+		appCache: baseAppCache({
+			put: async ({ id }) => {
+				puts.push(id);
+				if (failTags.has(id)) {
+					failTags.delete(id); // fail once per tag
+					throw new Error('db down');
+				}
+			},
+		}),
+	};
+	t.after(() => { delete globalThis.databases; });
+
+	const CacheHandler = freshModule();
+	const handler = new CacheHandler({});
+	await handler.get('/warmup');
+	puts.length = 0;
+
+	await handler.revalidateTag(['home', 'listing', 'pdp']);
+
+	// 3 first attempts; home and listing fail, pdp succeeds.
+	assert.equal(puts.length, 3);
+
+	t.mock.timers.tick(5001);
+	await new Promise((r) => setImmediate(r));
+	await new Promise((r) => setImmediate(r));
+
+	// 2 retries fired (only the failed tags).
+	assert.equal(puts.length, 5, 'retried only the failed tags');
+	const retried = new Set(puts.slice(3));
+	assert.ok(retried.has('home'), 'home retried');
+	assert.ok(retried.has('listing'), 'listing retried');
+	assert.ok(!retried.has('pdp'), 'pdp was not retried (already succeeded)');
+});
+
+test('invalidationTimes entries older than 7 days are evicted by the hourly timer', async (t) => {
+	// INVALIDATION_TTL_MS=604_800_000, INVALIDATION_EVICT_INTERVAL_MS=3_600_000.
+	// At the 169th interval firing (T=608_400_000) the cutoff is 3_600_000,
+	// which is greater than the invalidation timestamp of 0, so the entry is evicted.
+	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: 0 });
+
+	const payload = v8.serialize({ kind: 'APP_PAGE', html: '<h1>hello</h1>' });
+
+	globalThis.databases = {
+		appCache: {
+			...baseAppCache(),
+			Cache: {
+				get: async (key) =>
+					key === '/products/1'
+						? { data: payload, cacheTags: JSON.stringify(['sale']), refreshedAt: -1, groupCode: null, url: '/products/1' }
+						: null,
+				put: async () => {},
+				delete: async () => {},
+			},
+		},
+	};
+	t.after(() => { delete globalThis.databases; });
+
+	const CacheHandler = freshModule();
+	const handler = new CacheHandler({});
+
+	// T=0: initialize + stamp invalidation[sale]=0.
+	await handler.get('/warmup');
+	await handler.revalidateTag('sale');
+
+	// Entry with refreshedAt=-1 is invalidated (invalidatedAt=0 >= -1).
+	assert.equal(await handler.get('/products/1'), null, 'entry is invalidated before eviction');
+
+	// Tick past 169 eviction intervals so the hourly cleanup runs with a cutoff
+	// that exceeds the T=0 invalidation timestamp.
+	t.mock.timers.tick(608_400_001);
+	await new Promise((r) => setImmediate(r));
+
+	const result = await handler.get('/products/1');
+	assert.notEqual(result, null, 'entry is served after the invalidation is evicted');
+	assert.deepEqual(result.value, { kind: 'APP_PAGE', html: '<h1>hello</h1>' });
+});

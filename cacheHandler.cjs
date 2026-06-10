@@ -24,6 +24,9 @@ const v8 = require('node:v8');
 const CACHE_RULES_REFRESH_MS = 30_000;
 const INVALIDATION_RESYNC_MS = 30_000;
 const INVALIDATION_PUT_RETRY_MS = 5_000;
+// Must match the CacheInvalidation table's `expiration: 604800` (seconds → ms).
+const INVALIDATION_TTL_MS = 604_800_000;
+const INVALIDATION_EVICT_INTERVAL_MS = 3_600_000; // check once per hour
 
 // Module-level state so every CacheHandler instance in this worker shares one
 // rules cache, one invalidation mirror, and one table subscription.
@@ -35,6 +38,7 @@ let invalidationRetryTimer = null;
 let rulesPromise = null;
 let rulesLoadedAt = 0;
 let initializationPromise = null;
+let evictionStarted = false;
 
 function getAppCache() {
 	return globalThis.databases ? globalThis.databases.appCache : undefined;
@@ -157,12 +161,28 @@ function isInvalidated(keys, refreshedAt) {
 	return false;
 }
 
+// Purge entries older than INVALIDATION_TTL_MS once per hour. The in-memory
+// mirror would otherwise grow without bound because invalidationTimes has no
+// eviction of its own — this mirrors the DB table's 7-day TTL.
+function startEvictionTimer() {
+	if (evictionStarted) return;
+	evictionStarted = true;
+	const timer = setInterval(() => {
+		const cutoff = Date.now() - INVALIDATION_TTL_MS;
+		for (const [key, ts] of invalidationTimes) {
+			if (ts < cutoff) invalidationTimes.delete(key);
+		}
+	}, INVALIDATION_EVICT_INTERVAL_MS);
+	if (typeof timer.unref === 'function') timer.unref();
+}
+
 // Load the persisted invalidation log into the in-memory mirror, then keep it
 // current across workers by subscribing to CacheInvalidation changes. On
 // subscribe failure, retry the full sync (preload + subscribe) after a delay so
 // invalidations written by other workers while unsubscribed are eventually
 // picked up, even if the real-time subscription keeps failing.
 async function syncInvalidations(appCache) {
+	startEvictionTimer();
 	try {
 		for await (const record of appCache.CacheInvalidation.search()) {
 			recordInvalidation(record.id, record.timestamp ?? 0);
