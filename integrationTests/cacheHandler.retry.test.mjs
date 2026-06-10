@@ -120,7 +120,7 @@ test('concurrent failures are all retried, not just the last one', async (t) => 
 	assert.ok(!retried.has('pdp'), 'pdp was not retried (already succeeded)');
 });
 
-test('get() escalates to warn then error after consecutive DB failures', async (t) => {
+test('get() escalates to warn then error after consecutive DB failures, and resets on success', async (t) => {
 	const logs = { trace: [], warn: [], error: [] };
 	globalThis.logger = {
 		trace: (m) => logs.trace.push(m),
@@ -129,16 +129,17 @@ test('get() escalates to warn then error after consecutive DB failures', async (
 	};
 	t.after(() => { delete globalThis.logger; delete globalThis.databases; });
 
-	globalThis.databases = {
-		appCache: {
-			...baseAppCache(),
-			Cache: {
-				get: async () => { throw new Error('DB down'); },
-				put: async () => {},
-				delete: async () => {},
-			},
+	let throwOnGet = true;
+	const mockCache = {
+		get: async () => {
+			if (throwOnGet) throw new Error('DB down');
+			return null; // successful DB response, cache miss
 		},
+		put: async () => {},
+		delete: async () => {},
 	};
+
+	globalThis.databases = { appCache: { ...baseAppCache(), Cache: mockCache } };
 
 	const CacheHandler = freshModule();
 	const handler = new CacheHandler({});
@@ -156,6 +157,18 @@ test('get() escalates to warn then error after consecutive DB failures', async (
 	// Drive to the error threshold (20 total).
 	for (let i = 6; i <= 20; i++) await handler.get(`/products/${i}`);
 	assert.ok(logs.error.some((m) => m.includes('cache outage')), 'error logged at high threshold');
+
+	// DB recovers — one successful response resets the counter.
+	throwOnGet = false;
+	await handler.get('/products/recover');
+	throwOnGet = true;
+
+	// Next failure should be back at trace level (counter was reset).
+	const warnCountBefore = logs.warn.length;
+	const errorCountBefore = logs.error.length;
+	await handler.get('/products/after-reset');
+	assert.equal(logs.warn.length, warnCountBefore, 'no new warn after reset — counter restarted');
+	assert.equal(logs.error.length, errorCountBefore, 'no new error after reset — counter restarted');
 });
 
 test('subscription events with missing/non-numeric timestamps are ignored; valid timestamps are applied', async (t) => {
