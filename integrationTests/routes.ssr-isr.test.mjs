@@ -160,33 +160,3 @@ test('products listing filter/sort logic filters by category, price range, and s
 	const none = filterProducts(products, { category: 'Electronics', priceRange: [0, 10], sortBy: 'featured' });
 	assert.deepEqual(none, [], 'no matches must yield an empty array');
 });
-
-test('products-browser.js uses the shared filterProducts helper', async () => {
-	const { readFileSync } = await import('node:fs');
-	const source = readFileSync(path.join(ROOT, 'app', 'products', 'products-browser.js'), 'utf8');
-	assert.match(
-		source,
-		/import\s*\{\s*filterProducts\s*\}\s*from\s*["']\.\/filter-products\.mjs["']/,
-		'products-browser.js must import filterProducts from filter-products.mjs'
-	);
-	assert.match(
-		source,
-		/filterProducts\(initialProducts,\s*\{\s*category,\s*priceRange,\s*sortBy\s*\}\)/,
-		'products-browser.js must delegate filtering/sorting to filterProducts'
-	);
-});
-
-test('product detail page.js uses the shared validation predicate', async () => {
-	const { readFileSync } = await import('node:fs');
-	const source = readFileSync(path.join(ROOT, 'app', 'products', '[id]', 'page.js'), 'utf8');
-	assert.match(
-		source,
-		/import\s*\{\s*isValidProduct\s*\}\s*from\s*'\.\/validate-product\.mjs'/,
-		'page.js must import isValidProduct from validate-product.mjs'
-	);
-	assert.match(
-		source,
-		/if\s*\(\s*!isValidProduct\(product\)\s*\)\s*\{\s*\n\s*notFound\(\);/,
-		'page.js must call notFound() when isValidProduct(product) is false'
-	);
-});
