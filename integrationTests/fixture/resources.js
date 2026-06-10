@@ -9,8 +9,12 @@
  * tables.
  ***************************************************/
 
-import { tables, databases } from 'harper';
+import { tables, databases, Resource } from 'harper';
 import productdata from './productdata.json' with { type: 'json' };
+// The REAL lib/server-timing.mjs, copied in by app.test.ts (the copy is
+// gitignored) because Harper restricts a component to files inside its own
+// directory.
+import { recordDecisionDuration } from './server-timing-lib.mjs';
 
 // product table seed data
 for (const product of productdata) {
@@ -114,3 +118,15 @@ try {
 	probe.detail = `threw: ${error?.message ?? error}`;
 }
 tables.CacheProbe.put(probe);
+
+// Fixture-only HTTP endpoint for the server-timing middleware (issue #7):
+// records a fixed decision duration through the REAL lib/server-timing.mjs
+// accessor while handling a live REST request, so app.test.ts can assert the
+// server-timing extension appends `decision;dur` to the Server-Timing header
+// without stripping Harper core's own segments.
+export class ServerTimingProbe extends Resource {
+	get() {
+		recordDecisionDuration(42);
+		return { ok: true };
+	}
+}

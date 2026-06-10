@@ -18,6 +18,19 @@
 # (issue #5): resources.js loads the REAL repo-root cacheHandler.cjs (copied
 # in by app.test.ts) and exercises it against the appCache tables, recording
 # the outcome in CacheProbe — again without booting the Next plugin.
+#
+# It also covers the Server-Timing decision;dur middleware (issue #7): the
+# REAL server-timing extension and lib/server-timing.mjs accessor (copied in
+# by app.test.ts) wrap the fixture's REST endpoint, and ServerTimingProbe in
+# resources.js records a fixed duration so the test can assert the response
+# header over live HTTP. server-timing must load first: earlier-registered
+# http listeners are outer middleware layers, mirroring the root config.yaml
+# where it loads before @harperfast/nextjs.
+server-timing:
+  package: './server-timing'
+  files: '/*'
+rest:
+  webSocket: false
 graphqlSchema:
   files: '*.graphql'
 jsResource:

@@ -3,6 +3,13 @@
 .claude
 update-plan.md
 
+# integration-test fixture copies of production files (made by
+# integrationTests/app.test.ts so the repo-root files stay the single
+# source of truth)
+/integrationTests/fixture/cacheHandler.cjs
+/integrationTests/fixture/server-timing/extension.mjs
+/integrationTests/fixture/server-timing-lib.mjs
+
 # dependencies
 /node_modules
 /.pnp

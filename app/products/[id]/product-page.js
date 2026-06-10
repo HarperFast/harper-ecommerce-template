@@ -15,7 +15,10 @@ import {
   getUserTraits,
 } from '@/app/actions';
 
-export default function ProductPage({ id, product }) {
+// `serverPersonalized` marks a product whose description was already
+// personalized during the server render (/products/[id]/personalized); it
+// suppresses the duplicate client-side OpenAI personalization effect only.
+export default function ProductPage({ id, product, serverPersonalized = false }) {
   if (!product) notFound();
   const { aiPersonalizationEnabled } = useContext(ControlPanelContext);
   const [productDescReady, setProductDescReady] = useState(false);
@@ -27,7 +30,8 @@ export default function ProductPage({ id, product }) {
   useEffect(() => {
     const fetchData = async () => {
       // AI PRODUCT PERSONALIZATION
-      if (aiPersonalizationEnabled) {
+      // (skipped when the server already personalized the description)
+      if (aiPersonalizationEnabled && !serverPersonalized) {
         const traits = await getUserTraits() || [];
         setTraits(traits);
 
@@ -67,6 +71,10 @@ export default function ProductPage({ id, product }) {
   }, []);
 
   function renderProductDescription() {
+    if (serverPersonalized) {
+      // The server render already personalized product.description.
+      return product.description;
+    }
     if (aiPersonalizationEnabled && !customDescription && productDescReady === false) {
       return 'Custom description loading...';
     }

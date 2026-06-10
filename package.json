@@ -8,7 +8,7 @@
 		"start": "harper run .",
 		"lint": "next lint",
 		"test:integration": "harper-integration-test-run \"integrationTests/**/*.test.ts\"",
-		"test:unit": "node --test integrationTests/cacheHandler.retry.test.mjs"
+		"test:unit": "node --test integrationTests/cacheHandler.retry.test.mjs integrationTests/serverTiming.test.mjs"
 	},
 	"dependencies": {
 		"@harperfast/nextjs": "^2.0.0",

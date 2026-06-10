@@ -78,6 +78,9 @@ export async function customizeProductDescription(userTraits = [], productDescri
 		const response = await openaiClient.chat.completions.create({
 			messages: [{ role: 'user', content: prompt }],
 			model: 'gpt-4o-mini',
+			// The prompt asks for <= 300 characters (~75 tokens); cap the
+			// completion so a runaway response cannot inflate think-time.
+			max_tokens: 150,
 		});
 		return response.choices[0].message.content;
 	}
