@@ -37,16 +37,27 @@ export async function searchProducts(searchTerm = '') {
 	const term = searchTerm.trim();
 	if (!term) return [];
 
-	const query = EMBEDDINGS_ENABLED
-		? {
-				select: ['id', 'name', 'category', 'price', 'image', 'description', '$distance'],
-				sort: { attribute: 'embedding', target: await embed(term) },
-				limit: 8,
+	let query;
+	if (EMBEDDINGS_ENABLED) {
+		try {
+			const embedding = await embed(term);
+			if (embedding) {
+				query = {
+					select: ['id', 'name', 'category', 'price', 'image', 'description', '$distance'],
+					sort: { attribute: 'embedding', target: embedding },
+					limit: 8,
+				};
 			}
-		: {
-				conditions: [{ attribute: 'name', comparator: 'contains', value: term }],
-				limit: 8,
-			};
+		} catch (error) {
+			console.error('Embedding failed, falling back to keyword search:', error);
+		}
+	}
+	if (!query) {
+		query = {
+			conditions: [{ attribute: 'name', comparator: 'contains', value: term }],
+			limit: 8,
+		};
+	}
 
 	const results = [];
 	for await (const product of Product.search(query)) {
