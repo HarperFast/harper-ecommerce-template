@@ -1,0 +1,324 @@
+[
+  {
+    "id": "11",
+    "name": "Portable Laptop Stand",
+    "category": "Accessories",
+    "price": 39.99,
+    "image": "https://images.unsplash.com/photo-1623251606108-512c7c4a3507?auto=format&fit=crop&q=80&w=800",
+    "description": "Compact laptop stand with adjustable height",
+    "features": [
+      "Ergonomic design",
+      "Adjustable height",
+      "Lightweight and portable",
+      "Non-slip surface",
+      "Aluminum construction"
+    ],
+    "specs": {
+      "Material": "Aluminum",
+      "Weight": "1.2 lbs",
+      "Dimensions": "10\" x 9\" x 2\"",
+      "Warranty": "1 year"
+    }
+  },
+  {
+    "id": "12",
+    "name": "Fitness Tracker",
+    "category": "Fitness",
+    "price": 129.99,
+    "image": "https://images.unsplash.com/photo-1557935728-e6d1eaabe558?auto=format&fit=crop&q=80&w=800",
+    "description": "Advanced fitness tracker with heart rate monitor and GPS",
+    "features": [
+      "Heart rate monitor",
+      "Built-in GPS",
+      "Sleep tracking",
+      "Water-resistant",
+      "Smartphone notifications"
+    ],
+    "specs": {
+      "Battery Life": "7 days",
+      "Water Resistance": "5 ATM",
+      "Weight": "0.1 lbs",
+      "Display Size": "1.2 inches",
+      "Warranty": "1 year"
+    }
+  },
+  {
+    "id": "13",
+    "name": "Electric Kettle",
+    "category": "Home",
+    "price": 59.99,
+    "image": "https://images.unsplash.com/photo-1650940925927-f4a30c930a4d?auto=format&fit=crop&q=80&w=800",
+    "description": "Stainless steel electric kettle with fast boiling",
+    "features": [
+      "Fast boiling",
+      "Auto shut-off",
+      "Cordless design",
+      "1.7L capacity",
+      "Water level indicator"
+    ],
+    "specs": {
+      "Material": "Stainless steel",
+      "Capacity": "1.7 liters",
+      "Power": "1500W",
+      "Weight": "2.6 lbs",
+      "Warranty": "2 years"
+    }
+  },
+  {
+    "id": "14",
+    "name": "Digital Camera",
+    "category": "Electronics",
+    "price": 599.99,
+    "image": "https://images.unsplash.com/photo-1516728778615-2d590ea18558?auto=format&fit=crop&q=80&w=800",
+    "description": "Compact digital camera with 20MP sensor and 4K video recording",
+    "features": [
+      "20MP sensor",
+      "4K video recording",
+      "Wi-Fi and Bluetooth connectivity",
+      "3-inch touchscreen",
+      "Interchangeable lenses"
+    ],
+    "specs": {
+      "Resolution": "20MP",
+      "Video Resolution": "4K",
+      "Weight": "1.2 lbs",
+      "Display": "3-inch touchscreen",
+      "Warranty": "2 years"
+    }
+  },
+  {
+    "id": "15",
+    "name": "Adjustable Standing Desk",
+    "category": "Furniture",
+    "price": 299.99,
+    "image": "https://images.unsplash.com/photo-1622126977176-bf029dbf6ed0?auto=format&fit=crop&q=80&w=800",
+    "description": "Height adjustable standing desk with memory presets",
+    "features": [
+      "Electric height adjustment",
+      "Memory presets",
+      "Spacious tabletop",
+      "Cable management system",
+      "Sturdy frame"
+    ],
+    "specs": {
+      "Material": "Steel and wood",
+      "Height Range": "28\" - 48\"",
+      "Weight Capacity": "220 lbs",
+      "Dimensions": "60\" x 30\"",
+      "Warranty": "5 years"
+    }
+  },
+  {
+    "id": "16",
+    "name": "Smartwatch",
+    "category": "Electronics",
+    "price": 199.99,
+    "image": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=800",
+    "description": "Smartwatch with fitness tracking and customizable watch faces",
+    "features": [
+      "Fitness tracking",
+      "Customizable watch faces",
+      "GPS and heart rate monitor",
+      "Water-resistant",
+      "Voice assistant integration"
+    ],
+    "specs": {
+      "Battery Life": "2 days",
+      "Display Size": "1.4 inches",
+      "Weight": "0.08 lbs",
+      "Water Resistance": "5 ATM",
+      "Warranty": "1 year"
+    }
+  },
+  {
+    "id": "17",
+    "name": "Cordless Vacuum Cleaner",
+    "category": "Home",
+    "price": 249.99,
+    "image": "https://images.unsplash.com/photo-1527515673510-8aa78ce21f9b?auto=format&fit=crop&q=80&w=800",
+    "description": "Lightweight cordless vacuum cleaner with powerful suction",
+    "features": [
+      "Powerful suction",
+      "Lightweight design",
+      "HEPA filter",
+      "Detachable handheld mode",
+      "Long battery life"
+    ],
+    "specs": {
+      "Battery Life": "60 minutes",
+      "Weight": "5.5 lbs",
+      "Dustbin Capacity": "0.6 liters",
+      "Warranty": "2 years"
+    }
+  },
+  {
+    "id": "18",
+    "name": "Gaming Headset",
+    "category": "Electronics",
+    "price": 89.99,
+    "image": "https://images.unsplash.com/photo-1616081118936-562f7c13d9ca?auto=format&fit=crop&q=80&w=800",
+    "description": "Surround sound gaming headset with noise-cancelling microphone",
+    "features": [
+      "7.1 surround sound",
+      "Noise-cancelling microphone",
+      "Memory foam ear cushions",
+      "RGB lighting",
+      "Wireless connectivity"
+    ],
+    "specs": {
+      "Battery Life": "15 hours",
+      "Weight": "0.9 lbs",
+      "Frequency Response": "20Hz - 20kHz",
+      "Warranty": "1 year"
+    }
+  },
+  {
+    "id": "19",
+    "name": "Air Fryer",
+    "category": "Home",
+    "price": 129.99,
+    "image": "https://images.unsplash.com/photo-1655354435511-1809b2519cdf?auto=format&fit=crop&q=80&w=800",
+    "description": "Healthy cooking air fryer with 5.8 quart capacity",
+    "features": [
+      "Rapid air circulation technology",
+      "Adjustable temperature control",
+      "Non-stick basket",
+      "8 cooking presets",
+      "Dishwasher safe"
+    ],
+    "specs": {
+      "Capacity": "5.8 quarts",
+      "Power": "1700W",
+      "Weight": "11.2 lbs",
+      "Dimensions": "14\" x 12\" x 12\"",
+      "Warranty": "1 year"
+    }
+  },
+  {
+    "id": "20",
+    "name": "Smart Light Bulbs",
+    "category": "Home",
+    "price": 49.99,
+    "image": "https://images.unsplash.com/photo-1711006155490-ec01a0ecf0de?auto=format&fit=crop&q=80&w=800",
+    "description": "Color-changing smart light bulbs with voice control",
+    "features": [
+      "Voice control with Alexa and Google Assistant",
+      "16 million colors",
+      "Energy-efficient LED",
+      "Remote control via app",
+      "Customizable lighting schedules"
+    ],
+    "specs": {
+      "Wattage": "9W",
+      "Lifespan": "25,000 hours",
+      "Lumens": "800",
+      "Warranty": "2 years"
+    }
+  },
+  {
+    "id": "21",
+    "name": "Electric Scooter",
+    "category": "Outdoor",
+    "price": 399.99,
+    "image": "https://images.unsplash.com/photo-1614226170075-d338afcd9c53?auto=format&fit=crop&q=80&w=800",
+    "description": "Foldable electric scooter with 18-mile range",
+    "features": [
+      "Foldable design",
+      "18-mile range",
+      "LED headlight and taillight",
+      "Dual braking system",
+      "Cruise control"
+    ],
+    "specs": {
+      "Motor Power": "250W",
+      "Max Speed": "15.5 mph",
+      "Weight": "27 lbs",
+      "Battery Capacity": "36V 7.8Ah",
+      "Warranty": "1 year"
+    }
+  },
+  {
+    "id": "22",
+    "name": "Smart Coffee Maker",
+    "category": "Home",
+    "price": 99.99,
+    "image": "https://images.unsplash.com/photo-1588931196804-75b9cb0cd2a1?auto=format&fit=crop&q=80&w=800",
+    "description": "Wi-Fi connected coffee maker with programmable brew schedules",
+    "features": [
+      "Wi-Fi connectivity",
+      "Programmable brew schedules",
+      "Voice control with Alexa",
+      "12-cup capacity",
+      "Reusable filter"
+    ],
+    "specs": {
+      "Capacity": "12 cups",
+      "Power": "1000W",
+      "Weight": "6.5 lbs",
+      "Dimensions": "9\" x 10\" x 14\"",
+      "Warranty": "1 year"
+    }
+  },
+  {
+    "id": "23",
+    "name": "Wireless Charging Pad",
+    "category": "Accessories",
+    "price": 29.99,
+    "image": "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&q=80&w=800",
+    "description": "Slim wireless charging pad compatible with all Qi-enabled devices",
+    "features": [
+      "Fast wireless charging",
+      "Slim design",
+      "LED indicator",
+      "Non-slip surface",
+      "Overheat protection"
+    ],
+    "specs": {
+      "Power Output": "10W",
+      "Weight": "0.3 lbs",
+      "Dimensions": "4\" x 4\" x 0.3\"",
+      "Warranty": "1 year"
+    }
+  },
+  {
+    "id": "24",
+    "name": "Portable Power Bank",
+    "category": "Electronics",
+    "price": 49.99,
+    "image": "https://images.unsplash.com/photo-1585995603413-eb35b5f4a50b?auto=format&fit=crop&q=80&w=800",
+    "description": "High-capacity portable power bank with 20000mAh",
+    "features": [
+      "20000mAh capacity",
+      "Dual USB ports",
+      "LED battery indicator",
+      "Fast charging support",
+      "Compact design"
+    ],
+    "specs": {
+      "Capacity": "20000mAh",
+      "Weight": "0.8 lbs",
+      "Dimensions": "5.5\" x 2.5\" x 1\"",
+      "Warranty": "1 year"
+    }
+  },
+  {
+    "id": "25",
+    "name": "Electric Toothbrush",
+    "category": "Health",
+    "price": 79.99,
+    "image": "https://images.unsplash.com/photo-1553091844-4204b59e3661?auto=format&fit=crop&q=80&w=800",
+    "description": "Rechargeable electric toothbrush with 5 brushing modes",
+    "features": [
+      "5 brushing modes",
+      "2-minute timer",
+      "USB charging",
+      "Waterproof design",
+      "Replaceable brush heads"
+    ],
+    "specs": {
+      "Battery Life": "30 days",
+      "Weight": "0.25 lbs",
+      "Warranty": "1 year"
+    }
+  }
+]

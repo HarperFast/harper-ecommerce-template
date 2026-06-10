@@ -7,7 +7,7 @@ Harper provides the backend database, API, caching, and a server to run the Next
 Almost 2% of global ecommerce sales flow through Harper Systems, with an average p95 latency of 1.12ms across early hints, redirects, and product page lookups for real-world e-commerce applications.
 
 ## Getting Started
-- [Install Harper](https://docs.harperdb.io/docs/install-harperdb): `npm install -g harperdb`
+- [Install Harper](https://docs.harperdb.io/docs/install-harperdb): `npm install -g harper`
 - [Clone this repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) and change directory in your terminal to the code
 - Run `npm i`
 - Run `npm run dev`
