@@ -7,7 +7,6 @@ update-plan.md
 # integrationTests/app.test.ts so the repo-root files stay the single
 # source of truth)
 /integrationTests/fixture/cacheHandler.cjs
-/integrationTests/fixture/server-timing/extension.mjs
 /integrationTests/fixture/server-timing-lib.mjs
 
 # The fixture's node_modules/server-timing/ stub is COMMITTED (config.yaml

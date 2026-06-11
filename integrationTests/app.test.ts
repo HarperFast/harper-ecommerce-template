@@ -56,11 +56,12 @@ void suite('Harper ecommerce template data layer (v5)', (ctx: ContextWithHarper)
 		copyFileSync(resolve(__dirname, '../cacheHandler.cjs'), resolve(FIXTURE_PATH, 'cacheHandler.cjs'));
 		// Same single-source-of-truth treatment for the server-timing pieces
 		// (issue #7): the REAL extension backs the fixture's server-timing
-		// component, and the REAL accessor backs ServerTimingProbe in the
-		// fixture resources.js.
+		// component. Harper resolves the component from
+		// fixture/node_modules/server-timing/ (the committed stub directory);
+		// the extension.mjs must be copied there, not to fixture/server-timing/.
 		copyFileSync(
 			resolve(__dirname, '../server-timing/extension.mjs'),
-			resolve(FIXTURE_PATH, 'server-timing/extension.mjs')
+			resolve(FIXTURE_PATH, 'node_modules/server-timing/extension.mjs')
 		);
 		copyFileSync(resolve(__dirname, '../lib/server-timing.mjs'), resolve(FIXTURE_PATH, 'server-timing-lib.mjs'));
 		await setupHarperWithFixture(ctx, FIXTURE_PATH, { harperBinPath });
