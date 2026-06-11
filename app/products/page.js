@@ -6,13 +6,6 @@ import ProductsBrowser from "./products-browser";
 export const revalidate = 60;
 
 export default async function ProductsPage() {
-  // A database failure should render an empty-product state, not a 500.
-  let products = [];
-  try {
-    products = JSON.parse(await listProducts());
-  } catch (error) {
-    console.error('Failed to fetch products for listing page:', error);
-    products = [];
-  }
+  const products = JSON.parse(await listProducts());
   return <ProductsBrowser initialProducts={products} />;
 }

@@ -12,12 +12,7 @@ export const dynamicParams = true;
 
 export default async function Page({ params }) {
   const { id } = await params;
-  let product;
-  try {
-    product = await getProduct(id);
-  } catch {
-    notFound();
-  }
+  const product = await getProduct(id);
   // Guard on the server so unknown IDs return Next's 404 page instead of
   // failing during serialization below. The validation predicate lives in
   // validate-product.mjs (plain module) so unit tests exercise the real logic.
