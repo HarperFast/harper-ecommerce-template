@@ -91,9 +91,15 @@ export default function ProductPage({ id, product, serverPersonalized = false })
         {/* Image Gallery */}
         <div className="space-y-4">
           <div className="relative aspect-square overflow-hidden rounded-lg">
+            {/* The main product image is the LCP for /products/[id] and
+                /products/[id]/personalized (issue #8): high priority, stable
+                canonical src. Related-product images below use next/image
+                without `priority` (lazy), so this stays the single LCP
+                candidate. See docs/early-hints-manifest.md. */}
             <img
               src={product.image}
               alt={`${product.name} - Image`}
+              fetchPriority="high"
               className="object-cover product"
             />
           </div>

@@ -64,13 +64,17 @@ export default function ProductsBrowser({ initialProducts = [] }) {
 
       {/* Product Grid */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredProducts.map((product) => (
+        {filteredProducts.map((product, index) => (
           <Link key={product.id} href={`/products/${product.id}`}>
             <Card className="overflow-hidden transition-transform hover:scale-[1.02]">
               <div className="relative h-64">
+                {/* The first card image is the LCP candidate for /products
+                    (issue #8): mark it high priority without rewriting its
+                    canonical src. See docs/early-hints-manifest.md. */}
                 <img
                   src={product.image}
                   alt={product.name}
+                  fetchPriority={index === 0 ? "high" : undefined}
                   className="object-cover product"
                 />
               </div>
