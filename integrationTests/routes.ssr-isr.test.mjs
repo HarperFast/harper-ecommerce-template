@@ -2,12 +2,12 @@
  * Unit tests for the cacheable SSR/ISR primary routes (issue #6).
  *
  * These run with Node's built-in test runner (node --test) and do not require
- * a running Harper instance. The route page modules cannot be imported here
- * (they contain JSX and import 'harper'), so each route's segment config
- * (revalidate, dynamicParams) lives in a co-located plain route-config.mjs
- * module that the page re-exports. These tests import those production
- * modules and execute next.config.js for real, so they fail if the production
- * values change or are removed.
+ * a running Harper instance. They execute next.config.js for real and import
+ * the plain production modules (validate-product.mjs, filter-products.mjs)
+ * that the route components use, so they fail if the production logic changes
+ * or is removed. The route segment config (revalidate, dynamicParams) lives
+ * directly in each page.js, which contains JSX and imports 'harper', so it is
+ * verified by `next build` and the route-level integration checks instead.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,12 +19,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const _require = createRequire(import.meta.url);
 const ROOT = path.join(__dirname, '..');
 
-function importRouteConfig(...segments) {
-	return import(pathToFileURL(path.join(ROOT, 'app', ...segments, 'route-config.mjs')).href);
-}
-
 const EXPECTED_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=600';
-const EXPECTED_REVALIDATE = 60;
 
 test('next.config.js headers() sets the exact Cache-Control on /, /products, and /products/:id', async () => {
 	const config = _require(path.join(ROOT, 'next.config.js'));
@@ -38,23 +33,6 @@ test('next.config.js headers() sets the exact Cache-Control on /, /products, and
 		assert.ok(cacheControl, `expected a Cache-Control header for ${source}`);
 		assert.equal(cacheControl.value, EXPECTED_CACHE_CONTROL, `unexpected Cache-Control for ${source}`);
 	}
-});
-
-test('home route exports revalidate = 60 for ISR', async () => {
-	const config = await importRouteConfig();
-	assert.equal(config.revalidate, EXPECTED_REVALIDATE, 'home must revalidate every 60 seconds');
-});
-
-test('products listing route exports revalidate = 60 for ISR', async () => {
-	const config = await importRouteConfig('products');
-	assert.equal(config.revalidate, EXPECTED_REVALIDATE, 'listing must revalidate every 60 seconds');
-});
-
-test('product detail route exports revalidate = 60 and dynamicParams = true for on-demand ISR', async () => {
-	const config = await importRouteConfig('products', '[id]');
-	assert.equal(config.revalidate, EXPECTED_REVALIDATE, 'PDP must revalidate every 60 seconds');
-	assert.equal(config.dynamicParams, true, 'PDP must render unknown ids on demand');
-	assert.ok(!('generateStaticParams' in config), 'PDP config must not reintroduce build-time prerendering');
 });
 
 test('product detail validation guard rejects missing and malformed records', async () => {
