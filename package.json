@@ -29,6 +29,7 @@
 		"zod": "^3.25.76"
 	},
 	"devDependencies": {
+		"server-timing": "file:./server-timing",
 		"@harperdb/code-guidelines": "^0.0.6",
 		"@harperfast/integration-testing": "^0.4.0",
 		"@tailwindcss/postcss": "^4.1.11",
