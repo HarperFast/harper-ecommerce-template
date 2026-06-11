@@ -21,11 +21,26 @@ export function start(options) {
 		return (async () => {
 			const response = await next(request);
 			try {
+				const log = globalThis.logger ?? console;
+
+				log.info(`[server-timing] store.decisionDur=${store.decisionDur}`);
+
+				log.info(`[server-timing] response.headers exists=${response?.headers != null}`);
+				if (response?.headers != null) {
+					const existing = typeof response.headers.get === 'function'
+						? response.headers.get('server-timing')
+						: response.headers['server-timing'];
+					log.info(`[server-timing] response.headers current server-timing="${existing}"`);
+				}
+
+				log.info(`[server-timing] response.headers.append is function=${typeof response?.headers?.append === 'function'}`);
+
 				if (store.decisionDur != null && response?.headers?.append) {
 					response.headers.append('Server-Timing', `decision;dur=${Number(store.decisionDur).toFixed(1)}`);
 				}
-			} catch {
-				// Timing instrumentation must never break the response.
+			} catch (err) {
+				const log = globalThis.logger ?? console;
+				log.error(`[server-timing] error: ${err?.message}`);
 			}
 			return response;
 		})();
