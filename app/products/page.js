@@ -10,7 +10,8 @@ export default async function ProductsPage() {
   let products = [];
   try {
     products = JSON.parse(await listProducts());
-  } catch {
+  } catch (error) {
+    console.error('Failed to fetch products for listing page:', error);
     products = [];
   }
   return <ProductsBrowser initialProducts={products} />;

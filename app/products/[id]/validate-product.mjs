@@ -13,6 +13,9 @@ export function isValidProduct(product) {
 			product.name &&
 			typeof product.price === 'number' &&
 			product.price >= 0 &&
+			product.image &&
+			product.description &&
+			product.category &&
 			Array.isArray(product.features) &&
 			product.specs !== null &&
 			typeof product.specs === 'object' &&

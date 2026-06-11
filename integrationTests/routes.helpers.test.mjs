@@ -1,13 +1,16 @@
 /**
- * Unit tests for the cacheable SSR/ISR primary routes (issue #6).
+ * Unit tests for the helper modules used by the cacheable SSR/ISR routes (issue #6).
  *
  * These run with Node's built-in test runner (node --test) and do not require
- * a running Harper instance. They execute next.config.js for real and import
- * the plain production modules (validate-product.mjs, filter-products.mjs)
- * that the route components use, so they fail if the production logic changes
- * or is removed. The route segment config (revalidate, dynamicParams) lives
- * directly in each page.js, which contains JSX and imports 'harper', so it is
- * verified by `next build` and the route-level integration checks instead.
+ * a running Harper instance. They test next.config.js headers, the product
+ * validation predicate (validate-product.mjs), and the filter/sort logic
+ * (filter-products.mjs). The route segment configs (revalidate, dynamicParams)
+ * live in each page.js and are verified by `next build` and the integration
+ * test suite (integrationTests/app.test.ts).
+ *
+ * TODO: extend integrationTests/app.test.ts to verify Cache-Control headers,
+ * server-rendered HTML content, and ISR cache MISS/HIT behavior for /, /products,
+ * and /products/[id] once the Harper test environment supports live HTTP assertions.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
