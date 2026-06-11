@@ -151,6 +151,25 @@ test('products listing filter/sort logic filters by category, price range, and s
 	assert.deepEqual(none, [], 'no matches must yield an empty array');
 });
 
+// --- Build worker serialisation (issue #13 regression guard) ---
+
+test('next.config.js serialises build workers to prevent concurrent RocksDB lock contention', () => {
+	const config = _require(path.join(ROOT, 'next.config.js'));
+	assert.strictEqual(
+		config.experimental?.cpus,
+		1,
+		'experimental.cpus must be 1: build workers each require() the externalized harper module and ' +
+			'contend for RocksDB exclusive lock on appCache; without serialisation the build fails with ' +
+			'"Operation not permitted opening database appCache" (regressed in PRs #6/#8, fixed in #13)'
+	);
+	assert.strictEqual(
+		config.outputFileTracingRoot,
+		path.resolve(ROOT),
+		'outputFileTracingRoot must be set to the project root to silence Next.js workspace-root warning ' +
+			'(was dropped alongside experimental.cpus in the same restructure)'
+	);
+});
+
 // --- Early Hints origin contract (issue #8) ---
 
 test('next.config.js keeps images unoptimized and never emits Link or Server-Timing from headers()', async () => {
