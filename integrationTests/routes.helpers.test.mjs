@@ -172,7 +172,7 @@ test('each measured route marks a single, stable LCP image as high priority', ()
 	const homeSource = readFileSync(path.join(ROOT, 'app', 'page.js'), 'utf8');
 	const heroMatch = homeSource.match(/src="(https:\/\/images\.unsplash\.com\/[^"]+)"/);
 	assert.ok(heroMatch, 'expected the home hero to use a fixed images.unsplash.com src');
-	assert.ok(homeSource.includes('priority'), 'expected the home hero next/image to keep the priority attribute');
+	assert.ok(/<Image\b[^>]*\bpriority\b/.test(homeSource), 'expected the home hero next/image to keep the priority attribute as a JSX prop');
 
 	const browserSource = readFileSync(path.join(ROOT, 'app', 'products', 'products-browser.js'), 'utf8');
 	assert.ok(
