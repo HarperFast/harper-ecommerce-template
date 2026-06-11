@@ -6,6 +6,11 @@ const CACHE_HANDLER_PATH = path.join(__dirname, 'cacheHandler.cjs');
 const nextConfig = {
 	reactStrictMode: false,
 	eslint: { ignoreDuringBuilds: true },
+	// Early Hints origin contract (issue #8): keep image URLs stable and
+	// un-rewritten (no /_next/image?... rewrites) so each route's LCP image URL
+	// is predictable for upstream `103` hints. The app must not emit `103`
+	// itself and headers() must never set or overwrite `Link` or
+	// `Server-Timing` — only Cache-Control. See docs/early-hints-manifest.md.
 	images: { unoptimized: true },
 	cacheHandler: CACHE_HANDLER_PATH,
 	cacheMaxMemorySize: 0,

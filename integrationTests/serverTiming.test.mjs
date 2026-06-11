@@ -111,6 +111,26 @@ void suite('server-timing middleware (server-timing/extension.mjs)', () => {
 		strictEqual(result, 'plain-response');
 	});
 
+	void test('passes upstream Link and Server-Timing headers through unchanged (issue #8)', async () => {
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
+		const upstreamLink = '<https://images.unsplash.com>; rel=preconnect';
+		const response = createMockResponse('upstream;dur=1.0');
+		response.headers.append('Link', upstreamLink);
+
+		await listener(request, async () => {
+			withHarperContext(request, () => recordDecisionDuration(3));
+			return response;
+		});
+
+		strictEqual(response.headers.get('link'), upstreamLink, 'Link must never be stripped or rewritten');
+		strictEqual(
+			response.headers.get('server-timing'),
+			'upstream;dur=1.0, decision;dur=3.0',
+			'Server-Timing must be appended to, never replaced'
+		);
+	});
+
 	void test('keeps concurrent request stores isolated', async () => {
 		const makeReq = createListener();
 		const { request: req1, listener } = makeReq();
@@ -183,6 +203,14 @@ void suite('personalized route wiring (source-level guards)', () => {
 		const source = readFileSync(resolve(ROOT, 'next.config.js'), 'utf8');
 		ok(source.includes("'/products/:id/personalized'"), 'expected a headers() rule for the personalized route');
 		ok(source.includes('no-store'), 'expected the personalized route to be marked no-store');
+	});
+
+	void test('server-timing extension only appends headers and never emits Early Hints (issue #8)', () => {
+		const source = readFileSync(resolve(ROOT, 'server-timing/extension.mjs'), 'utf8');
+		ok(source.includes("headers.append('Server-Timing'"), 'expected the decision;dur segment to be appended');
+		ok(!source.includes('headers.set'), 'extension must never overwrite headers with headers.set');
+		ok(!source.includes('headers.delete'), 'extension must never strip headers with headers.delete');
+		ok(!source.includes('writeEarlyHints'), 'the app must not emit HTTP 103 — Early Hints are emitted upstream');
 	});
 
 	void test('customizeProductDescription keeps gpt-4o-mini and caps max_tokens', () => {

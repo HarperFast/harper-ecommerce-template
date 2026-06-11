@@ -13,6 +13,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
@@ -148,4 +149,80 @@ test('products listing filter/sort logic filters by category, price range, and s
 
 	const none = filterProducts(products, { category: 'Electronics', priceRange: [0, 10], sortBy: 'featured' });
 	assert.deepEqual(none, [], 'no matches must yield an empty array');
+});
+
+// --- Early Hints origin contract (issue #8) ---
+
+test('next.config.js keeps images unoptimized and never emits Link or Server-Timing from headers()', async () => {
+	const config = _require(path.join(ROOT, 'next.config.js'));
+	assert.equal(config.images?.unoptimized, true, 'images.unoptimized must stay true so LCP image URLs are never rewritten through /_next/image');
+
+	const headers = await config.headers();
+	for (const entry of headers) {
+		for (const header of entry.headers) {
+			assert.ok(
+				!/^(link|server-timing)$/i.test(header.key),
+				`headers() must not set or overwrite ${header.key} for ${entry.source}; upstream owns Link/103 and the server-timing component appends Server-Timing`
+			);
+		}
+	}
+});
+
+test('each measured route marks a single, stable LCP image as high priority', () => {
+	const homeSource = readFileSync(path.join(ROOT, 'app', 'page.js'), 'utf8');
+	const heroMatch = homeSource.match(/src="(https:\/\/images\.unsplash\.com\/[^"]+)"/);
+	assert.ok(heroMatch, 'expected the home hero to use a fixed images.unsplash.com src');
+	assert.ok(homeSource.includes('priority'), 'expected the home hero next/image to keep the priority attribute');
+
+	const browserSource = readFileSync(path.join(ROOT, 'app', 'products', 'products-browser.js'), 'utf8');
+	assert.ok(
+		browserSource.includes(`fetchPriority={index === 0 ? "high" : undefined}`),
+		'expected only the first /products card image to be marked fetchpriority=high (single LCP candidate, canonical src untouched)'
+	);
+
+	const productPageSource = readFileSync(path.join(ROOT, 'app', 'products', '[id]', 'product-page.js'), 'utf8');
+	assert.ok(
+		productPageSource.includes('fetchPriority="high"'),
+		'expected the main product image on /products/[id] (and /personalized) to be marked fetchpriority=high'
+	);
+	assert.ok(
+		!/relatedProduct[\s\S]*?priority/.test(productPageSource.slice(productPageSource.indexOf('Related Products'))),
+		'related-product images must not be prioritized (no second competing LCP image)'
+	);
+});
+
+test('docs/early-hints-manifest.md lists the preconnect host and exact LCP URLs for all four routes', async () => {
+	const manifest = readFileSync(path.join(ROOT, 'docs', 'early-hints-manifest.md'), 'utf8');
+
+	for (const route of ['## /\n', '## /products\n', '## /products/[id]\n', '## /products/[id]/personalized\n']) {
+		assert.ok(manifest.includes(route), `expected a manifest section for ${route.trim()}`);
+	}
+	assert.ok(
+		manifest.includes('**Preconnect host (all routes):** `https://images.unsplash.com`'),
+		'expected the shared preconnect host'
+	);
+
+	// The hero preload URL must match the actual src rendered by app/page.js.
+	const homeSource = readFileSync(path.join(ROOT, 'app', 'page.js'), 'utf8');
+	const heroUrl = homeSource.match(/src="(https:\/\/images\.unsplash\.com\/[^"]+)"/)[1];
+	assert.ok(manifest.includes(heroUrl), `expected the manifest to list the exact hero image URL ${heroUrl}`);
+
+	// The /products preload URL must match the first card the listing renders:
+	// seed order through the real filterProducts() with the default controls.
+	const { filterProducts } = await import(
+		pathToFileURL(path.join(ROOT, 'app', 'products', 'filter-products.mjs')).href
+	);
+	const seedProducts = _require(path.join(ROOT, 'productdata.json'));
+	const firstCard = filterProducts(seedProducts, { category: 'all', priceRange: [0, 300], sortBy: 'featured' })[0];
+	assert.ok(
+		manifest.includes(firstCard.image),
+		`expected the manifest to list the first product-card image URL ${firstCard.image}`
+	);
+
+	// Chunk filenames are fingerprinted per build; the manifest must say to
+	// refresh them from the built document head instead of hard-coding them.
+	assert.ok(
+		/change on every build/.test(manifest) && /document `<head>`/.test(manifest),
+		'expected guidance that CSS/JS chunk paths are per-build and must be read from the built document head'
+	);
 });

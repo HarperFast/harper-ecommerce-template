@@ -32,6 +32,10 @@ export default async function Home() {
   return (
     <main className="flex min-h-screen flex-col">
       {/* Hero Section */}
+      {/* The hero image is the LCP for / (issue #8): keep `priority` and a
+          fixed, known src so upstream Early Hints can preload it. The featured
+          product images below use next/image without `priority` (lazy), so the
+          hero stays the single LCP candidate. See docs/early-hints-manifest.md. */}
       <section className="relative h-[600px] w-full">
         <Image
           src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=2000"
