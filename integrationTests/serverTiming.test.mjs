@@ -131,6 +131,20 @@ void suite('recordDecisionDuration (lib/server-timing.mjs)', () => {
 	void test('is a safe no-op outside a request context', () => {
 		recordDecisionDuration(5);
 	});
+
+	void test('path 2: writes to request.__serverTimingStore via globalThis.getContext (Harper resource path)', () => {
+		// Simulate the Harper resource path: getContext() returns the request object
+		// (Harper's transaction() stores the request as its ALS context).
+		const store = {};
+		const mockRequest = { __serverTimingStore: store };
+		globalThis.getContext = () => mockRequest;
+		try {
+			recordDecisionDuration(99);
+			strictEqual(store.decisionDur, 99, 'timing must be written to the store attached to the request');
+		} finally {
+			delete globalThis.getContext;
+		}
+	});
 });
 
 void suite('personalized route wiring (source-level guards)', () => {

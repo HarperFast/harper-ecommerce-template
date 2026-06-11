@@ -2,15 +2,18 @@
  * Harper HTTP middleware that publishes a `decision;dur=<ms>` segment on the
  * `Server-Timing` response header (issue #7).
  *
- * App Router server components cannot set response headers directly, so the
- * personalized PDP records its fetch-and-customize elapsed time into a
- * per-request AsyncLocalStorage store (see lib/server-timing.mjs); this
- * middleware owns that store and appends the segment to the response headers
- * after the downstream handler completes.
+ * Two propagation paths for the timing value (see lib/server-timing.mjs):
  *
- * Harper's HTTP middleware receives a Fetch API-style Response whose
- * `headers.append()` correctly coalesces multi-value headers without
- * overwriting existing segments (e.g. `hdb;dur` added by Harper core).
+ * 1. Next.js render path — the timing value is recorded into an
+ *    AsyncLocalStorage store established by this middleware. Works because the
+ *    Next.js render runs within the `als.run(store, fn)` async context.
+ *
+ * 2. Harper resource path — Harper's transaction() stores the request as its
+ *    own ALS context; getContext() returns it from within resource handlers.
+ *    This middleware attaches `__serverTimingStore` to the request so the
+ *    lib accessor can write there, then reads it back after next() returns.
+ *    Used as fallback when the extension's ALS does not propagate across
+ *    Harper's VM-sandbox boundary.
  *
  * The store handle lives on `process` rather than `globalThis`: Harper loads
  * components in sandboxed VM contexts whose `globalThis` is a per-scope
@@ -25,11 +28,19 @@ export function start(options) {
 
 	options.server.http((request, next) => {
 		const store = {};
+		// Attach the store to the request so Harper resource handlers can write
+		// to it via getContext().__serverTimingStore (path 2 fallback).
+		request.__serverTimingStore = store;
+
 		return als.run(store, async () => {
 			const response = await next(request);
 			try {
-				if (store.decisionDur != null && response?.headers?.append) {
-					response.headers.append('Server-Timing', `decision;dur=${Number(store.decisionDur).toFixed(1)}`);
+				// store.decisionDur is set via ALS (path 1).
+				// request.__serverTimingStore.decisionDur is set via getContext() (path 2).
+				// Both write to the same `store` object, so either path works.
+				const decisionDur = store.decisionDur;
+				if (decisionDur != null && response?.headers?.append) {
+					response.headers.append('Server-Timing', `decision;dur=${Number(decisionDur).toFixed(1)}`);
 				}
 			} catch {
 				// Timing instrumentation must never break the response.
