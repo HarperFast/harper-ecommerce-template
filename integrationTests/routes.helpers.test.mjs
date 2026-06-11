@@ -86,6 +86,15 @@ test('product detail validation guard rejects missing and malformed records', as
 	);
 	assert.equal(isValidProduct({ ...validProduct, specs: null }), false, 'null specs must be rejected');
 
+	const { image: _image, ...withoutImage } = validProduct;
+	assert.equal(isValidProduct(withoutImage), false, 'missing image must be rejected');
+	assert.equal(isValidProduct({ ...validProduct, image: '' }), false, 'empty image must be rejected');
+	const { description: _desc, ...withoutDescription } = validProduct;
+	assert.equal(isValidProduct(withoutDescription), false, 'missing description must be rejected');
+	assert.equal(isValidProduct({ ...validProduct, description: '' }), false, 'empty description must be rejected');
+	const { category: _cat, ...withoutCategory } = validProduct;
+	assert.equal(isValidProduct(withoutCategory), false, 'missing category must be rejected');
+	assert.equal(isValidProduct({ ...validProduct, category: '' }), false, 'empty category must be rejected');
 	assert.equal(isValidProduct(validProduct), true, 'a well-formed product record must be accepted');
 	assert.equal(isValidProduct({ ...validProduct, price: 0 }), true, 'price of 0 is a valid price');
 });
