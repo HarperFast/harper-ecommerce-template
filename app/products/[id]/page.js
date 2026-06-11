@@ -1,17 +1,19 @@
 import 'harper';
+import { notFound } from 'next/navigation';
 import ProductPage from './product-page';
-import { listProducts, getProduct } from '@/app/actions';
+import { getProduct } from '@/app/actions';
+import { isValidProduct } from './validate-product.mjs';
 
-export async function generateStaticParams() {
-  const products = JSON.parse(await listProducts());
-  return products.map((data) => ({
-    id: data.id,
-  }))
-}
+// On-demand ISR: no build-time prerender of every product (which contended
+// for the database lock); each product renders on first request and is cached
+// via the Harper cache handler for up to 60 seconds.
+export const revalidate = 60;
+export const dynamicParams = true;
 
 export default async function Page({ params }) {
   const { id } = await params;
   const product = await getProduct(id);
+  if (product == null || !isValidProduct(product)) notFound();
   return (
     <ProductPage
       id={id}
