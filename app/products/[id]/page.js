@@ -13,9 +13,7 @@ export const dynamicParams = true;
 export default async function Page({ params }) {
   const { id } = await params;
   const product = await getProduct(id);
-  // Missing product → 404; malformed product → 500 (data integrity issue).
-  if (product == null) notFound();
-  if (!isValidProduct(product)) throw new Error(`Malformed product record for id=${id}`);
+  if (product == null || !isValidProduct(product)) notFound();
   return (
     <ProductPage
       id={id}
