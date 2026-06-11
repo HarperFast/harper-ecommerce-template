@@ -1,19 +1,10 @@
 /**
  * Unit tests for the Server-Timing decision;dur plumbing (issue #7).
  *
- * Exercises the REAL production modules:
- *   - server-timing/extension.mjs (Harper HTTP middleware owning the ALS store)
- *   - lib/server-timing.mjs (render-path accessor that records the duration)
- *
- * plus source-level wiring guards for the pieces that only take effect inside
- * a full Next.js/Harper boot (force-dynamic route config, Cache-Control
- * header, component ordering), which the integration harness cannot serve
- * (see integrationTests/fixture/config.yaml for why the Next plugin cannot
- * boot there).
- *
- * Harper's HTTP middleware uses a Fetch API-style Response whose
- * `headers.append()` coalesces multi-value headers without overwriting
- * existing segments added by Harper core (e.g. `hdb;dur`).
+ * The middleware attaches a store to request.__serverTimingStore; the lib
+ * accessor finds it via globalThis.harper.getContext() (Harper's transaction()
+ * stores the request as its ALS context, and getContext is on the `harper`
+ * global, not the bare globalThis). Both hold a reference to the same object.
  */
 import { suite, test } from 'node:test';
 import { ok, strictEqual } from 'node:assert/strict';
@@ -25,12 +16,10 @@ import { recordDecisionDuration } from '../lib/server-timing.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-// Minimal Fetch API-style response mock with a multi-value-aware Headers.
-function createMockResponse(initialHeaders = {}) {
+// Minimal Fetch API-style response mock.
+function createMockResponse(initialServerTiming) {
 	const map = new Map();
-	for (const [k, v] of Object.entries(initialHeaders)) {
-		map.set(k.toLowerCase(), v);
-	}
+	if (initialServerTiming) map.set('server-timing', initialServerTiming);
 	const headers = {
 		append(name, value) {
 			const key = name.toLowerCase();
@@ -44,21 +33,36 @@ function createMockResponse(initialHeaders = {}) {
 	return { headers };
 }
 
-// Registers the middleware and returns the listener.
+// Register middleware and return the listener + a mock request factory.
 function createListener() {
 	let listener;
 	start({ server: { http(fn) { listener = fn; } } });
-	return listener;
+	// Return a factory so each test gets a fresh request with its own store.
+	return (extraProps = {}) => {
+		const request = { ...extraProps };
+		return { request, listener };
+	};
+}
+
+// Simulate Harper's getContext() by wiring globalThis.harper.getContext to
+// return the request object (as Harper's transaction() does at runtime).
+function withHarperContext(request, fn) {
+	globalThis.harper = { getContext: () => request };
+	try {
+		return fn();
+	} finally {
+		delete globalThis.harper;
+	}
 }
 
 void suite('server-timing middleware (server-timing/extension.mjs)', () => {
-	void test('appends decision;dur to the response headers, propagating across awaits', async () => {
-		const listener = createListener();
+	void test('appends decision;dur after the downstream handler records the duration', async () => {
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
 		const response = createMockResponse();
 
-		await listener({}, async () => {
-			await new Promise((r) => setTimeout(r, 5));
-			recordDecisionDuration(42);
+		await listener(request, async () => {
+			withHarperContext(request, () => recordDecisionDuration(42));
 			return response;
 		});
 
@@ -66,84 +70,88 @@ void suite('server-timing middleware (server-timing/extension.mjs)', () => {
 	});
 
 	void test('appends to an existing Server-Timing value without overwriting it', async () => {
-		const listener = createListener();
-		// Harper core adds its own segment before returning the response.
-		const response = createMockResponse({ 'Server-Timing': 'hdb;dur=1.52' });
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
+		const response = createMockResponse('hdb;dur=1.52');
 
-		await listener({}, async () => {
-			recordDecisionDuration(7.25);
+		await listener(request, async () => {
+			withHarperContext(request, () => recordDecisionDuration(7.25));
 			return response;
 		});
 
 		strictEqual(response.headers.get('server-timing'), 'hdb;dur=1.52, decision;dur=7.3');
 	});
 
-	void test('leaves headers untouched when no decision duration was recorded', async () => {
-		const listener = createListener();
-		const response = createMockResponse({ 'Server-Timing': 'hdb;dur=3.1' });
+	void test('leaves headers untouched when no duration was recorded', async () => {
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
+		const response = createMockResponse('hdb;dur=3.1');
 
-		await listener({}, async () => response);
+		await listener(request, async () => response);
 
 		strictEqual(response.headers.get('server-timing'), 'hdb;dur=3.1');
 	});
 
 	void test('returns the response from the next layer unchanged', async () => {
-		const listener = createListener();
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
 		const response = createMockResponse();
-		const result = await listener({}, () => response);
+		const result = await listener(request, () => response);
 		strictEqual(result, response);
 	});
 
-	void test('passes through responses without a headers.append method safely', async () => {
-		const listener = createListener();
-		// e.g. a plain string or symbol response — must not throw.
-		const result = await listener({}, async () => {
-			recordDecisionDuration(5);
+	void test('does not throw when response lacks headers.append', async () => {
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
+
+		const result = await listener(request, async () => {
+			withHarperContext(request, () => recordDecisionDuration(5));
 			return 'plain-response';
 		});
 		strictEqual(result, 'plain-response');
 	});
 
 	void test('keeps concurrent request stores isolated', async () => {
-		const listener = createListener();
-		const first = createMockResponse();
-		const second = createMockResponse();
+		const makeReq = createListener();
+		const { request: req1, listener } = makeReq();
+		const { request: req2 } = makeReq();
+		const resp1 = createMockResponse();
+		const resp2 = createMockResponse();
 
 		await Promise.all([
-			listener({}, async () => {
+			listener(req1, async () => {
 				await new Promise((r) => setTimeout(r, 10));
-				recordDecisionDuration(11);
-				return first;
+				withHarperContext(req1, () => recordDecisionDuration(11));
+				return resp1;
 			}),
-			listener({}, async () => {
-				recordDecisionDuration(22);
+			listener(req2, async () => {
+				withHarperContext(req2, () => recordDecisionDuration(22));
 				await new Promise((r) => setTimeout(r, 15));
-				return second;
+				return resp2;
 			}),
 		]);
 
-		strictEqual(first.headers.get('server-timing'), 'decision;dur=11.0');
-		strictEqual(second.headers.get('server-timing'), 'decision;dur=22.0');
+		strictEqual(resp1.headers.get('server-timing'), 'decision;dur=11.0');
+		strictEqual(resp2.headers.get('server-timing'), 'decision;dur=22.0');
 	});
 });
 
 void suite('recordDecisionDuration (lib/server-timing.mjs)', () => {
-	void test('is a safe no-op outside a request context', () => {
-		recordDecisionDuration(5);
-	});
-
-	void test('path 2: writes to request.__serverTimingStore via globalThis.getContext (Harper resource path)', () => {
-		// Simulate the Harper resource path: getContext() returns the request object
-		// (Harper's transaction() stores the request as its ALS context).
+	void test('writes to request.__serverTimingStore via globalThis.harper.getContext', () => {
 		const store = {};
 		const mockRequest = { __serverTimingStore: store };
-		globalThis.getContext = () => mockRequest;
+		globalThis.harper = { getContext: () => mockRequest };
 		try {
 			recordDecisionDuration(99);
-			strictEqual(store.decisionDur, 99, 'timing must be written to the store attached to the request');
+			strictEqual(store.decisionDur, 99);
 		} finally {
-			delete globalThis.getContext;
+			delete globalThis.harper;
 		}
+	});
+
+	void test('is a safe no-op when harper context is unavailable', () => {
+		// No globalThis.harper — must not throw.
+		recordDecisionDuration(5);
 	});
 });
 
@@ -168,7 +176,7 @@ void suite('personalized route wiring (source-level guards)', () => {
 		const nextjsIndex = source.indexOf("'@harperfast/nextjs':");
 		ok(serverTimingIndex !== -1, 'expected the server-timing component to be configured');
 		ok(nextjsIndex !== -1, 'expected the Next.js plugin to be configured');
-		ok(serverTimingIndex < nextjsIndex, 'expected server-timing to load before the Next.js plugin so its ALS context wraps the render');
+		ok(serverTimingIndex < nextjsIndex, 'expected server-timing to load before the Next.js plugin');
 	});
 
 	void test('next.config.js sends Cache-Control: no-store for the personalized route', () => {
