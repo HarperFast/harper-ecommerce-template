@@ -3,6 +3,17 @@
 .claude
 update-plan.md
 
+# integration-test fixture copies of production files (made by
+# integrationTests/app.test.ts so the repo-root files stay the single
+# source of truth)
+/integrationTests/fixture/cacheHandler.cjs
+/integrationTests/fixture/server-timing-lib.mjs
+
+# The fixture's node_modules/server-timing/ stub is COMMITTED (config.yaml
+# only; extension.mjs is copied in at test time). Exclude only the generated
+# extension copy, not the whole stub directory.
+/integrationTests/fixture/node_modules/server-timing/extension.mjs
+
 # dependencies
 /node_modules
 /.pnp

@@ -4,6 +4,12 @@ graphqlSchema:
   files: '*.graphql'
 jsResource:
   files: './resources.js'
+# Must load BEFORE @harperfast/nextjs: earlier-registered http listeners are
+# outer middleware layers, so its AsyncLocalStorage context wraps the Next.js
+# render and `decision;dur` can be recorded from server components (issue #7).
+server-timing:
+  package: './server-timing'
+  files: '/*'
 '@harperfast/nextjs':
   package: '@harperfast/nextjs'
   setCwd: false

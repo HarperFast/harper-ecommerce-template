@@ -10,13 +10,14 @@ const nextConfig = {
 	cacheHandler: CACHE_HANDLER_PATH,
 	cacheMaxMemorySize: 0,
 	// Deterministic per-route Cache-Control for the cacheable SSR/ISR routes
-	// (issue #6). Values align with the routes' `revalidate = 60`.
+	// (issue #6) and the never-cache personalized route (issue #7).
 	async headers() {
-		const cacheControl = { key: 'Cache-Control', value: 'public, max-age=60, stale-while-revalidate=600' };
+		const isr = { key: 'Cache-Control', value: 'public, max-age=60, stale-while-revalidate=600' };
 		return [
-			{ source: '/', headers: [cacheControl] },
-			{ source: '/products', headers: [cacheControl] },
-			{ source: '/products/:id', headers: [cacheControl] },
+			{ source: '/', headers: [isr] },
+			{ source: '/products', headers: [isr] },
+			{ source: '/products/:id', headers: [isr] },
+			{ source: '/products/:id/personalized', headers: [{ key: 'Cache-Control', value: 'no-store' }] },
 		];
 	},
 };

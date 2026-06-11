@@ -1,0 +1,6 @@
+# Fixture wrapper for the REAL repo-root server-timing component.
+# app.test.ts copies ../../server-timing/extension.mjs in here before boot
+# (the copy is gitignored), because Harper restricts a component to files
+# inside its own directory. Keeps the production extension the single source
+# of truth while letting the integration test exercise it over live HTTP.
+extensionModule: ./extension.mjs

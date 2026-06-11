@@ -54,6 +54,16 @@ void suite('Harper ecommerce template data layer (v5)', (ctx: ContextWithHarper)
 		// directory; the copy is gitignored so the production file stays the
 		// single source of truth.
 		copyFileSync(resolve(__dirname, '../cacheHandler.cjs'), resolve(FIXTURE_PATH, 'cacheHandler.cjs'));
+		// Same single-source-of-truth treatment for the server-timing pieces
+		// (issue #7): the REAL extension backs the fixture's server-timing
+		// component. Harper resolves the component from
+		// fixture/node_modules/server-timing/ (the committed stub directory);
+		// the extension.mjs must be copied there, not to fixture/server-timing/.
+		copyFileSync(
+			resolve(__dirname, '../server-timing/extension.mjs'),
+			resolve(FIXTURE_PATH, 'node_modules/server-timing/extension.mjs')
+		);
+		copyFileSync(resolve(__dirname, '../lib/server-timing.mjs'), resolve(FIXTURE_PATH, 'server-timing-lib.mjs'));
 		await setupHarperWithFixture(ctx, FIXTURE_PATH, { harperBinPath });
 	});
 
@@ -193,6 +203,30 @@ void suite('Harper ecommerce template data layer (v5)', (ctx: ContextWithHarper)
 		})) as Array<{ id: string; timestamp: number }>;
 		strictEqual(invalidations.length, 1, 'expected the probe-tag invalidation row');
 		ok(typeof invalidations[0].timestamp === 'number', 'expected a numeric invalidation timestamp');
+	});
+
+	void test('server-timing middleware appends decision;dur to Server-Timing over live HTTP', async () => {
+		// ServerTimingProbe (fixture resources.js) records a fixed 42ms decision
+		// duration through the real lib/server-timing.mjs accessor while the
+		// real server-timing/extension.mjs middleware wraps the request — the
+		// same ALS plumbing the personalized PDP uses under @harperfast/nextjs.
+		const { httpURL, admin } = ctx.harper;
+		const creds = Buffer.from(`${admin.username}:${admin.password}`).toString('base64');
+		const res = await fetch(`${httpURL}/ServerTimingProbe/1`, {
+			headers: { Authorization: `Basic ${creds}` },
+		});
+		strictEqual(res.status, 200, `expected the probe endpoint to respond with 200, got ${res.status}`);
+		const serverTiming = res.headers.get('server-timing') ?? '';
+		ok(
+			serverTiming.includes('decision;dur=42.0'),
+			`expected decision;dur=42.0 in Server-Timing, got: "${serverTiming}"`
+		);
+		// Harper core stamps its own segment on REST responses; appending
+		// decision;dur must not strip or overwrite it.
+		ok(
+			serverTiming.includes('hdb;dur='),
+			`expected Harper core's hdb;dur segment to be preserved, got: "${serverTiming}"`
+		);
 	});
 
 	void test('cacheHandler.cjs round-trips a Blob-backed entry and honors bypass/invalidation', async () => {
