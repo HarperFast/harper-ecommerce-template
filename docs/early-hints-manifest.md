@@ -1,5 +1,13 @@
 # Early Hints manifest (per route)
 
+> **Maintenance**: the LCP image URLs below are derived from `productdata.json`
+> and `app/page.js`. Run `npm run test:unit` after any change to those files —
+> the `routes.helpers.test.mjs` suite cross-checks every URL in this manifest
+> against the live source. A failing test means this file needs updating.
+> CSS/JS chunk paths change on every build; refresh them from the built
+> `<head>` as described in the [Critical CSS / first-load JS chunks](#critical-css--first-load-js-chunks)
+> section after each deploy.
+
 This manifest describes, per measured route, the resources an upstream Early
 Hints (HTTP `103`) emitter should `preconnect`/`preload`. The app itself never
 emits `103` and never strips or overwrites `Link` or `Server-Timing` response
