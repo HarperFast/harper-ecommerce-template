@@ -33,9 +33,8 @@ const CACHE_RULES = [
 	{ id: 'listing', description: 'Products listing', priority: 30, pathPatterns: ['^/products$'], groupCode: 'listing' },
 	{ id: 'home', description: 'Home', priority: 40, pathPatterns: ['^/$'], groupCode: 'home' },
 ];
-for (const rule of CACHE_RULES) {
-	databases.appCache.CacheRules.put(rule);
-}
+// Await all puts so rules are committed before the probe runs (fixes race on Node 24).
+await Promise.all(CACHE_RULES.map((rule) => databases.appCache.CacheRules.put(rule)));
 
 // Exercise the REAL repo-root cacheHandler.cjs (app.test.ts copies it into
 // this fixture before boot) against live Harper tables: rule matching, a
