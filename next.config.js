@@ -12,8 +12,14 @@ const nextConfig = {
 	// itself and headers() must never set or overwrite `Link` or
 	// `Server-Timing` — only Cache-Control. See docs/early-hints-manifest.md.
 	images: { unoptimized: true },
+	outputFileTracingRoot: __dirname,
 	cacheHandler: CACHE_HANDLER_PATH,
 	cacheMaxMemorySize: 0,
+	// Build workers each load the (externalized) harper module, and concurrent
+	// processes contend for the same database lock. One worker serializes
+	// page-data collection and static generation so `next build` works against
+	// a local Harper root.
+	experimental: { cpus: 1 },
 	// Deterministic per-route Cache-Control for the cacheable SSR/ISR routes
 	// (issue #6) and the never-cache personalized route (issue #7).
 	async headers() {
