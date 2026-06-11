@@ -1,4 +1,3 @@
-import 'harper';
 import ProductPage from '../product-page';
 import { getProduct, getUserTraits, customizeProductDescription } from '@/app/actions';
 import { recordDecisionDuration } from '@/lib/server-timing.mjs';
