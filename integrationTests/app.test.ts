@@ -235,4 +235,137 @@ void suite('Harper ecommerce template data layer (v5)', (ctx: ContextWithHarper)
 		strictEqual(entries[0].url, '/products/cache-probe');
 		ok(typeof entries[0].refreshedAt === 'number', 'expected a numeric refreshedAt');
 	});
+
+	// ISR caching infrastructure for the primary routes (issue #6): the routes
+	// themselves require the Next.js plugin (incompatible with this harness — see
+	// above), so we verify the Harper side of the contract the routes depend on:
+	// Cache entry persistence, CacheInvalidation staleness semantics, and the
+	// seeded CacheRules that map paths to cache groups.
+	void suite('ISR cache data layer (issue #6)', () => {
+		void test('a simulated ISR cache entry persists in appCache.Cache with its fields intact', async () => {
+			const cacheKey = '/products/isr-sim';
+			const refreshedAt = Date.now();
+			await op(ctx, {
+				operation: 'insert',
+				database: 'appCache',
+				table: 'Cache',
+				records: [
+					{
+						cacheKey,
+						kind: 'APP_PAGE',
+						data: '<html>isr-sim</html>',
+						headers: '{"content-type":"text/html"}',
+						cacheTags: 'isr-sim-tag',
+						groupCode: 'pdp',
+						url: cacheKey,
+						refreshedAt,
+					},
+				],
+			});
+
+			const entries = (await op(ctx, {
+				operation: 'search_by_id',
+				database: 'appCache',
+				table: 'Cache',
+				ids: [cacheKey],
+				get_attributes: ['cacheKey', 'kind', 'groupCode', 'url', 'cacheTags', 'refreshedAt'],
+			})) as Array<{
+				cacheKey: string;
+				kind: string;
+				groupCode: string;
+				url: string;
+				cacheTags: string;
+				refreshedAt: number;
+			}>;
+			strictEqual(entries.length, 1, 'expected the simulated cache entry to persist');
+			strictEqual(entries[0].cacheKey, cacheKey);
+			strictEqual(entries[0].kind, 'APP_PAGE');
+			strictEqual(entries[0].groupCode, 'pdp');
+			strictEqual(entries[0].url, cacheKey);
+			strictEqual(entries[0].cacheTags, 'isr-sim-tag');
+			strictEqual(entries[0].refreshedAt, refreshedAt, 'expected refreshedAt to round-trip unchanged');
+		});
+
+		void test('a CacheInvalidation row marks an earlier-refreshed Cache entry as stale', async () => {
+			const cacheKey = '/products/isr-stale';
+			const tag = 'isr-stale-tag';
+			const refreshedAt = Date.now();
+			await op(ctx, {
+				operation: 'insert',
+				database: 'appCache',
+				table: 'Cache',
+				records: [
+					{
+						cacheKey,
+						kind: 'APP_PAGE',
+						data: '<html>isr-stale</html>',
+						cacheTags: tag,
+						groupCode: 'listing',
+						url: cacheKey,
+						refreshedAt,
+					},
+				],
+			});
+
+			// The invalidation arrives strictly after the cache entry was refreshed,
+			// which is the condition cacheHandler.cjs treats as stale (soft MISS).
+			const invalidatedAt = refreshedAt + 1000;
+			await op(ctx, {
+				operation: 'insert',
+				database: 'appCache',
+				table: 'CacheInvalidation',
+				records: [{ id: tag, timestamp: invalidatedAt }],
+			});
+
+			const invalidations = (await op(ctx, {
+				operation: 'search_by_id',
+				database: 'appCache',
+				table: 'CacheInvalidation',
+				ids: [tag],
+				get_attributes: ['id', 'timestamp'],
+			})) as Array<{ id: string; timestamp: number }>;
+			strictEqual(invalidations.length, 1, 'expected the CacheInvalidation row to persist');
+			strictEqual(invalidations[0].id, tag);
+			strictEqual(invalidations[0].timestamp, invalidatedAt, 'expected the invalidation timestamp to round-trip');
+
+			const entries = (await op(ctx, {
+				operation: 'search_by_id',
+				database: 'appCache',
+				table: 'Cache',
+				ids: [cacheKey],
+				get_attributes: ['cacheKey', 'refreshedAt'],
+			})) as Array<{ cacheKey: string; refreshedAt: number }>;
+			strictEqual(entries.length, 1, 'expected the cache entry row to still exist (soft invalidation)');
+			ok(
+				entries[0].refreshedAt < invalidations[0].timestamp,
+				`expected refreshedAt (${entries[0].refreshedAt}) before the invalidation timestamp ` +
+					`(${invalidations[0].timestamp}) so the entry is treated as stale`,
+			);
+		});
+
+		void test('CacheRules is seeded with the four rules from resources.js with correct bypass/group values', async () => {
+			const rules = (await op(ctx, {
+				operation: 'search_by_value',
+				database: 'appCache',
+				table: 'CacheRules',
+				search_attribute: 'id',
+				search_value: '*',
+				get_attributes: ['id', 'groupCode', 'bypassCache'],
+			})) as Array<{ id: string; groupCode?: string | null; bypassCache?: boolean | null }>;
+			strictEqual(rules.length, 4, `expected exactly 4 seeded cache rules, got ${rules.length}`);
+			const byId = new Map(rules.map((rule) => [rule.id, rule]));
+
+			// personalized: never cached, no group.
+			strictEqual(byId.get('personalized')?.bypassCache, true, 'expected personalized to bypass the cache');
+			ok(byId.get('personalized')?.groupCode == null, 'expected no groupCode on the personalized rule');
+
+			// pdp / listing / home: cached, grouped, not bypassed.
+			for (const id of ['pdp', 'listing', 'home']) {
+				const rule = byId.get(id);
+				ok(rule, `expected the ${id} rule to be seeded`);
+				strictEqual(rule?.groupCode, id, `expected groupCode "${id}" on the ${id} rule`);
+				ok(rule?.bypassCache !== true, `expected the ${id} rule not to bypass the cache`);
+			}
+		});
+	});
 });

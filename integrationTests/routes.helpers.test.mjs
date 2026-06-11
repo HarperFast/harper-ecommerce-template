@@ -8,9 +8,8 @@
  * live in each page.js and are verified by `next build` and the integration
  * test suite (integrationTests/app.test.ts).
  *
- * TODO: extend integrationTests/app.test.ts to verify Cache-Control headers,
- * server-rendered HTML content, and ISR cache MISS/HIT behavior for /, /products,
- * and /products/[id] once the Harper test environment supports live HTTP assertions.
+ * Cache MISS/HIT behavior and CacheInvalidation semantics are verified in the
+ * Harper data-layer suite (integrationTests/app.test.ts).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
