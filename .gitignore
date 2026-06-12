@@ -15,7 +15,7 @@ update-plan.md
 /integrationTests/fixture/node_modules/server-timing/extension.mjs
 
 # dependencies
-/node_modules
+**/node_modules
 /.pnp
 .pnp.js
 
