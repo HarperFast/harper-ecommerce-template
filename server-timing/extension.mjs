@@ -21,6 +21,26 @@ export function start(options) {
 		request.__serverTimingStore = store;
 		const started = performance.now();
 
+		// @harperfast/nextjs calls requestHandler(_nodeRequest, _nodeResponse)
+		// and returns void — no Fetch API response object is ever returned. We
+		// intercept writeHead so the header is injected at the moment Node.js
+		// is about to flush response headers, after the render has run.
+		const nodeRes = request._nodeResponse;
+		if (nodeRes?.writeHead) {
+			const origWriteHead = nodeRes.writeHead.bind(nodeRes);
+			nodeRes.writeHead = function (...args) {
+				try {
+					const dur = store.decisionDur ?? (performance.now() - started);
+					const segment = `decision;dur=${Number(dur).toFixed(1)}`;
+					const existing = nodeRes.getHeader('Server-Timing');
+					nodeRes.setHeader('Server-Timing', existing ? `${existing}, ${segment}` : segment);
+				} catch {
+					// Timing instrumentation must never break the response.
+				}
+				return origWriteHead(...args);
+			};
+		}
+
 		return (async () => {
 			const response = await next(request);
 			try {

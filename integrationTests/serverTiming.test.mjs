@@ -159,6 +159,124 @@ void suite('server-timing middleware (server-timing/extension.mjs)', () => {
 	});
 });
 
+// Stub that mirrors the Node.js ServerResponse header API without needing a
+// real socket. This exercises the _nodeResponse path that @harperfast/nextjs
+// takes at runtime (it calls requestHandler(_nodeRequest, _nodeResponse) and
+// returns void — never a Fetch API response object).
+function createNodeResponseStub(initialServerTiming) {
+	const headers = new Map();
+	if (initialServerTiming) headers.set('server-timing', initialServerTiming);
+	return {
+		setHeader(name, value) { headers.set(name.toLowerCase(), value); },
+		getHeader(name) { return headers.get(name.toLowerCase()) ?? undefined; },
+		writeHead(statusCode, ...rest) {
+			this.statusCode = statusCode;
+			// merge any headers passed directly to writeHead (mirrors Node.js semantics)
+			const last = rest[rest.length - 1];
+			if (last && typeof last === 'object' && !Array.isArray(last)) {
+				for (const [k, v] of Object.entries(last)) headers.set(k.toLowerCase(), v);
+			}
+		},
+	};
+}
+
+void suite('server-timing middleware — Node.js _nodeResponse path (real Harper+Next.js behavior)', () => {
+	// @harperfast/nextjs calls requestHandler(_nodeRequest, _nodeResponse) and
+	// returns void. The middleware's Fetch-API guard (response?.headers?.append)
+	// never fires. These tests exercise the writeHead-interception path that
+	// makes the header visible in the actual running app.
+
+	void test('injects decision;dur via writeHead when next() writes to _nodeResponse and returns undefined', async () => {
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
+		const nodeRes = createNodeResponseStub();
+		request._nodeResponse = nodeRes;
+
+		await listener(request, async (req) => {
+			withHarperContext(req, () => recordDecisionDuration(42));
+			nodeRes.writeHead(200);
+			return undefined;
+		});
+
+		strictEqual(nodeRes.getHeader('server-timing'), 'decision;dur=42.0');
+	});
+
+	void test('falls back to elapsed time when recordDecisionDuration was not called', async () => {
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
+		const nodeRes = createNodeResponseStub();
+		request._nodeResponse = nodeRes;
+
+		await listener(request, async () => {
+			nodeRes.writeHead(200);
+			return undefined;
+		});
+
+		const st = nodeRes.getHeader('server-timing');
+		ok(st?.startsWith('decision;dur='), `expected elapsed fallback, got: ${st}`);
+	});
+
+	void test('appends to an existing Server-Timing already set on _nodeResponse', async () => {
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
+		const nodeRes = createNodeResponseStub('hdb;dur=1.5');
+		request._nodeResponse = nodeRes;
+
+		await listener(request, async (req) => {
+			withHarperContext(req, () => recordDecisionDuration(7));
+			nodeRes.writeHead(200);
+			return undefined;
+		});
+
+		strictEqual(nodeRes.getHeader('server-timing'), 'hdb;dur=1.5, decision;dur=7.0');
+	});
+
+	void test('preserves all other writeHead arguments (status code, statusMessage, extra headers)', async () => {
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
+		const nodeRes = createNodeResponseStub();
+		request._nodeResponse = nodeRes;
+
+		await listener(request, async (req) => {
+			withHarperContext(req, () => recordDecisionDuration(3));
+			nodeRes.writeHead(201, 'Created', { 'X-Custom': 'yes' });
+			return undefined;
+		});
+
+		strictEqual(nodeRes.statusCode, 201);
+		strictEqual(nodeRes.getHeader('x-custom'), 'yes');
+		strictEqual(nodeRes.getHeader('server-timing'), 'decision;dur=3.0');
+	});
+
+	void test('does not double-inject when next() returns a Fetch API response AND _nodeResponse is absent', async () => {
+		// Sanity check: Fetch API path still works on its own (no _nodeResponse).
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
+		const response = createMockResponse();
+
+		await listener(request, async (req) => {
+			withHarperContext(req, () => recordDecisionDuration(10));
+			return response;
+		});
+
+		strictEqual(response.headers.get('server-timing'), 'decision;dur=10.0');
+	});
+
+	void test('does not throw when _nodeResponse.writeHead is called after headers conceptually sent', async () => {
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
+		const nodeRes = createNodeResponseStub();
+		nodeRes.setHeader = () => { throw new Error('headers already sent'); };
+		request._nodeResponse = nodeRes;
+
+		// Should not throw — the try/catch in the interceptor must absorb the error.
+		await listener(request, async () => {
+			nodeRes.writeHead(200);
+			return undefined;
+		});
+	});
+});
+
 void suite('recordDecisionDuration (lib/server-timing.mjs)', () => {
 	void test('writes to request.__serverTimingStore via globalThis.harper.getContext', () => {
 		const store = {};
