@@ -82,14 +82,17 @@ void suite('server-timing middleware (server-timing/extension.mjs)', () => {
 		strictEqual(response.headers.get('server-timing'), 'hdb;dur=1.52, decision;dur=7.3');
 	});
 
-	void test('leaves headers untouched when no duration was recorded', async () => {
+	void test('falls back to elapsed request time when no duration was explicitly recorded', async () => {
 		const makeReq = createListener();
 		const { request, listener } = makeReq();
 		const response = createMockResponse('hdb;dur=3.1');
 
 		await listener(request, async () => response);
 
-		strictEqual(response.headers.get('server-timing'), 'hdb;dur=3.1');
+		// Upstream hdb segment must be preserved and decision;dur must be appended
+		// (elapsed fallback — exact value is timing-dependent so we pattern-check).
+		const st = response.headers.get('server-timing');
+		ok(st?.startsWith('hdb;dur=3.1, decision;dur='), `expected elapsed fallback, got: ${st}`);
 	});
 
 	void test('returns the response from the next layer unchanged', async () => {
