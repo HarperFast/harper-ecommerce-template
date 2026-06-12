@@ -1,4 +1,3 @@
-import 'harper';
 import { notFound } from 'next/navigation';
 import ProductPage from './product-page';
 import { getProduct } from '@/app/actions';

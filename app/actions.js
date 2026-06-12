@@ -1,13 +1,19 @@
 'use server';
-import { tables } from 'harper';
-const { Product } = tables;
+// Access Harper's tables through the runtime global rather than a static
+// module-level import. A static `import { tables } from 'harper'` fires when
+// the module is first loaded — including in Next.js build workers that evaluate
+// pages to collect route-segment config. Those workers are separate processes
+// where the parent Harper process already holds an exclusive RocksDB lock on
+// appCache, so the open fails. globalThis.tables is populated by Harper at
+// startup and is available by the time any server action is called.
 import { initOpenai } from '@/lib/utils';
 import { embed, EMBEDDINGS_ENABLED } from '@/lib/embeddings';
 
 // Harper DB Server Actions
 export async function listProducts(conditions = {}) {
+	if (!globalThis.tables) return JSON.stringify([]);
 	const products = [];
-	const results = Product.search(conditions);
+	const results = globalThis.tables.Product.search(conditions);
 	for await (const product of results) {
 		products.push(product);
 	}
@@ -15,15 +21,16 @@ export async function listProducts(conditions = {}) {
 }
 
 export async function getProduct(id) {
-	return tables.Product.get(id);
+	return globalThis.tables?.Product.get(id) ?? null;
 }
 
 export async function getUserTraits(id = "1") {
-	return tables.Traits.get(id).traits;
+	return globalThis.tables?.Traits.get(id)?.traits ?? [];
 }
 
 export async function updateUserTraits(id = "1", traits) {
-	await tables.Traits.put({ id, traits });
+	if (!globalThis.tables) return;
+	await globalThis.tables.Traits.put({ id, traits });
 	return 'successfully updated Traits table';
 }
 
@@ -34,6 +41,7 @@ export async function updateUserTraits(id = "1", traits) {
 // Falls back to a Harper keyword match otherwise, so search works with no keys
 // and no external search service.
 export async function searchProducts(searchTerm = '') {
+	if (!globalThis.tables) return [];
 	const term = searchTerm.trim();
 	if (!term) return [];
 
@@ -60,7 +68,7 @@ export async function searchProducts(searchTerm = '') {
 	}
 
 	const results = [];
-	for await (const product of Product.search(query)) {
+	for await (const product of globalThis.tables.Product.search(query)) {
 		results.push(product);
 	}
 	return results;
