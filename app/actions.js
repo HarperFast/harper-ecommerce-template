@@ -72,7 +72,9 @@ export async function searchProducts(searchTerm = '') {
 	for await (const product of globalThis.tables.Product.search(query)) {
 		results.push(product);
 	}
-	return results;
+	// JSON round-trip converts Harper Records to plain objects so callers
+	// receive standard {id, name, price, ...} shapes via server-action RPC.
+	return JSON.parse(JSON.stringify(results));
 }
 
 // OpenAI Server Actions
