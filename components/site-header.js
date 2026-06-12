@@ -7,9 +7,11 @@ import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuPortal, DropdownMenuContent } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
 import { searchProducts } from '@/app/actions';
+import { useCart } from '@/lib/cart-context';
 
 export function SiteHeader() {
   const [searchResults, setSearchResults] = useState([]);
+  const { itemCount, openCart } = useCart();
 
   function search(e) {
     const target = e.target;
@@ -34,9 +36,8 @@ export function SiteHeader() {
           </Link>
 
           <DropdownMenu>
-
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="ghost" onClick={() => {}}>
+              <Button size="icon" variant="ghost">
                 <Search className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
@@ -48,15 +49,11 @@ export function SiteHeader() {
                   <Input type="text" onChange={search} />
                 </div>
                 <div style={{ paddingTop: 10, paddingBottom: 10 }}>
-                  {searchProducts && searchResults.map(res => (
+                  {searchResults.map(res => (
                     <Link key={`product-${res.id}`} href={`/products/${res.id}`}>
                       <div style={{ paddingTop: 5, paddingBottom: 5 }}>
-                        <div>
-                          {res.name}
-                        </div>
-                        <div style={{ color: 'gray', fontSize: 12 }}>
-                          {res.description}
-                        </div>
+                        <div>{res.name}</div>
+                        <div style={{ color: 'gray', fontSize: 12 }}>{res.description}</div>
                       </div>
                     </Link>
                   ))}
@@ -65,8 +62,13 @@ export function SiteHeader() {
             </DropdownMenuPortal>
           </DropdownMenu>
 
-          <Button size="icon" variant="ghost">
+          <Button size="icon" variant="ghost" onClick={openCart} aria-label="Open cart" className="relative">
             <ShoppingBag className="h-5 w-5" />
+            {itemCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                {itemCount > 9 ? '9+' : itemCount}
+              </span>
+            )}
           </Button>
         </nav>
       </div>

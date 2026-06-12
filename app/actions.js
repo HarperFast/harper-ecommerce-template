@@ -25,7 +25,8 @@ export async function getProduct(id) {
 }
 
 export async function getUserTraits(id = "1") {
-	return globalThis.tables?.Traits.get(id)?.traits ?? [];
+	const record = await globalThis.tables?.Traits.get(id);
+	return record?.traits ? [...record.traits] : [];
 }
 
 export async function updateUserTraits(id = "1", traits) {
@@ -75,8 +76,8 @@ export async function searchProducts(searchTerm = '') {
 }
 
 // OpenAI Server Actions
-const openaiClient = initOpenai();
 export async function customizeProductDescription(userTraits = [], productDescription) {
+	const openaiClient = initOpenai();
 	if (openaiClient) {
 		const prompt = `Given that a person has the following traits: ${userTraits.join(', ')} 
 			can you rewrite the following product description passage for someone like this: ${productDescription} without using exclamation points?

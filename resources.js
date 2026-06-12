@@ -31,6 +31,4 @@ const CACHE_RULES = [
 	{ id: 'listing', description: 'Products listing', priority: 30, pathPatterns: ['^/products$'], groupCode: 'listing' },
 	{ id: 'home', description: 'Home', priority: 40, pathPatterns: ['^/$'], groupCode: 'home' },
 ];
-for (const rule of CACHE_RULES) {
-	databases.appCache.CacheRules.put(rule);
-}
+await Promise.all(CACHE_RULES.map((rule) => databases.appCache.CacheRules.put(rule)));
