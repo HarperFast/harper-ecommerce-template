@@ -2,6 +2,10 @@ rest:
   webSocket: false
 graphqlSchema:
   files: '*.graphql'
+# Load .env before jsResource so OPENAI_API_KEY is in process.env when
+# resources.js runs, ensuring products are seeded with embeddings on startup.
+loadEnv:
+  files: '.env'
 jsResource:
   files: './resources.js'
 # Must load BEFORE @harperfast/nextjs: earlier-registered http listeners are
