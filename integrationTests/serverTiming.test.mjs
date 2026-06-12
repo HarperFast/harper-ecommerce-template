@@ -171,9 +171,13 @@ function createNodeResponseStub(initialServerTiming) {
 		getHeader(name) { return headers.get(name.toLowerCase()) ?? undefined; },
 		writeHead(statusCode, ...rest) {
 			this.statusCode = statusCode;
-			// merge any headers passed directly to writeHead (mirrors Node.js semantics)
+			// mirror Node.js semantics: accept both [[name,value],…] and {name:value}
 			const last = rest[rest.length - 1];
-			if (last && typeof last === 'object' && !Array.isArray(last)) {
+			if (Array.isArray(last)) {
+				for (const [k, v] of last) {
+					if (typeof k === 'string') headers.set(k.toLowerCase(), v);
+				}
+			} else if (last && typeof last === 'object') {
 				for (const [k, v] of Object.entries(last)) headers.set(k.toLowerCase(), v);
 			}
 		},
@@ -246,6 +250,46 @@ void suite('server-timing middleware — Node.js _nodeResponse path (real Harper
 		strictEqual(nodeRes.statusCode, 201);
 		strictEqual(nodeRes.getHeader('x-custom'), 'yes');
 		strictEqual(nodeRes.getHeader('server-timing'), 'decision;dur=3.0');
+	});
+
+	void test('injects into array-of-pairs headers — the exact format Harper passes via Array.from(fetchHeaders)', async () => {
+		// Harper calls: nodeResponse.writeHead(status, Array.from(fetchHeaders))
+		// Array.from(new Headers([…])) yields [[name, value], …] pairs.
+		// Using setHeader() before origWriteHead() populates kOutHeaders, causing
+		// Node.js's slow path to treat the array-of-pairs as a flat key/value list
+		// and pass pair[0] (an array) to removeHeader() → ERR_INVALID_ARG_TYPE.
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
+		const nodeRes = createNodeResponseStub();
+		request._nodeResponse = nodeRes;
+
+		await listener(request, async (req) => {
+			withHarperContext(req, () => recordDecisionDuration(42));
+			nodeRes.writeHead(200, [
+				['server-timing', 'hdb;dur=1.52'],
+				['content-length', '0'],
+			]);
+			return undefined;
+		});
+
+		strictEqual(nodeRes.getHeader('server-timing'), 'hdb;dur=1.52, decision;dur=42.0');
+		strictEqual(nodeRes.getHeader('content-length'), '0');
+	});
+
+	void test('falls back to appending a new Server-Timing entry when array-of-pairs has none', async () => {
+		const makeReq = createListener();
+		const { request, listener } = makeReq();
+		const nodeRes = createNodeResponseStub();
+		request._nodeResponse = nodeRes;
+
+		await listener(request, async (req) => {
+			withHarperContext(req, () => recordDecisionDuration(5));
+			nodeRes.writeHead(200, [['content-type', 'application/json']]);
+			return undefined;
+		});
+
+		strictEqual(nodeRes.getHeader('server-timing'), 'decision;dur=5.0');
+		strictEqual(nodeRes.getHeader('content-type'), 'application/json');
 	});
 
 	void test('does not double-inject when next() returns a Fetch API response AND _nodeResponse is absent', async () => {
