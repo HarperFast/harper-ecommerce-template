@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ControlPanelContext } from "@/components/control-panel";
+import { useCart } from "@/lib/cart-context";
 import {
   listProducts,
   customizeProductDescription,
@@ -21,6 +22,7 @@ import {
 export default function ProductPage({ id, product, serverPersonalized = false }) {
   if (!product) notFound();
   const { aiPersonalizationEnabled } = useContext(ControlPanelContext);
+  const { addToCart } = useCart();
   const [productDescReady, setProductDescReady] = useState(false);
   const [recommendationsReady, setRecommendationsReady] = useState(false);
   const [relatedProducts, setRelatedProducts] = useState([]);
@@ -116,7 +118,11 @@ export default function ProductPage({ id, product, serverPersonalized = false })
             <p className="text-muted-foreground" style={{ minHeight: 100 }}>{renderProductDescription()}</p>
 
             <div className="flex items-center space-x-4">
-              <Button size="lg" className="flex-1">
+              <Button
+                size="lg"
+                className="flex-1"
+                onClick={() => addToCart({ id, name: product.name, price: product.price, image: product.image })}
+              >
                 <ShoppingBag className="mr-2 h-5 w-5" />
                 Add to Cart
               </Button>
