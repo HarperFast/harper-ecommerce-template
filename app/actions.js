@@ -46,33 +46,39 @@ export async function searchProducts(searchTerm = '') {
 	const term = searchTerm.trim();
 	if (!term) return [];
 
-	let query;
+	// Vector search: use HNSW nearest-neighbour when embeddings are available.
+	// Falls back to keyword search if the API call fails or the HNSW index is
+	// empty (products seeded before OPENAI_API_KEY was in process.env).
 	if (EMBEDDINGS_ENABLED) {
 		try {
 			const embedding = await embed(term);
 			if (embedding) {
-				query = {
+				const vectorResults = [];
+				for await (const product of globalThis.tables.Product.search({
 					select: ['id', 'name', 'category', 'price', 'image', 'description', '$distance'],
 					sort: { attribute: 'embedding', target: embedding },
 					limit: 8,
-				};
+				})) {
+					vectorResults.push(product);
+				}
+				if (vectorResults.length > 0) {
+					return JSON.parse(JSON.stringify(vectorResults));
+				}
 			}
 		} catch (error) {
-			console.error('Embedding failed, falling back to keyword search:', error);
+			console.error('Vector search failed, falling back to keyword search:', error);
 		}
 	}
-	if (!query) {
-		query = {
-			conditions: [{ attribute: 'name', comparator: 'contains', value: term }],
-			limit: 8,
-		};
-	}
 
-	const results = [];
-	for await (const product of globalThis.tables.Product.search(query)) {
-		results.push(product);
+	// Keyword fallback: case-sensitive substring match on name.
+	const keywordResults = [];
+	for await (const product of globalThis.tables.Product.search({
+		conditions: [{ attribute: 'name', comparator: 'contains', value: term }],
+		limit: 8,
+	})) {
+		keywordResults.push(product);
 	}
-	return results;
+	return JSON.parse(JSON.stringify(keywordResults));
 }
 
 // OpenAI Server Actions

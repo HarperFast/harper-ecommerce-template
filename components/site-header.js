@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ShoppingBag, Search } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuPortal, DropdownMenuContent } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
@@ -10,16 +11,30 @@ import { searchProducts } from '@/app/actions';
 import { useCart } from '@/lib/cart-context';
 
 export function SiteHeader() {
+  const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const { itemCount, openCart } = useCart();
+  const router = useRouter();
+  const debounceRef = useRef(null);
 
-  function search(e) {
-    const target = e.target;
-    clearTimeout(target.searchTimeout);
-    target.searchTimeout = setTimeout(() => {
-      searchProducts(target.value)
+  function handleSearchChange(e) {
+    const value = e.target.value;
+    setSearchTerm(value);
+    clearTimeout(debounceRef.current);
+    if (!value.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      searchProducts(value)
         .then(res => setSearchResults(Array.isArray(res) ? res : []));
     }, 300);
+  }
+
+  function handleSearchKeyDown(e) {
+    if (e.key === 'Enter' && searchTerm.trim()) {
+      router.push(`/products?q=${encodeURIComponent(searchTerm.trim())}`);
+    }
   }
 
   return (
@@ -45,9 +60,14 @@ export function SiteHeader() {
             <DropdownMenuPortal>
               <DropdownMenuContent style={{ width: 400, padding: 10 }}>
                 <h3 style={{ paddingBottom: 5 }}>Search</h3>
-                <div>
-                  <Input type="text" onChange={search} />
-                </div>
+                <Input
+                  type="text"
+                  placeholder="Search products… press Enter to see all results"
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  onKeyDown={handleSearchKeyDown}
+                  autoFocus
+                />
                 <div style={{ paddingTop: 10, paddingBottom: 10 }}>
                   {searchResults.map(res => (
                     <Link key={`product-${res.id}`} href={`/products/${res.id}`}>
@@ -57,6 +77,11 @@ export function SiteHeader() {
                       </div>
                     </Link>
                   ))}
+                  {searchTerm.trim() && searchResults.length === 0 && (
+                    <div style={{ color: 'gray', fontSize: 12, paddingTop: 5 }}>
+                      No results — press Enter to search all products
+                    </div>
+                  )}
                 </div>
               </DropdownMenuContent>
             </DropdownMenuPortal>

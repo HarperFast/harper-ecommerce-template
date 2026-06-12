@@ -11,21 +11,66 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
 import { filterProducts } from "./filter-products.mjs";
+import { searchProducts } from "@/app/actions";
 
 // Interactive listing UI (filter/sort), seeded with server-rendered products
-// so the initial HTML already contains the product grid.
+// so the initial HTML already contains the product grid. When the URL has a
+// ?q= param the component fetches search results client-side and shows them
+// instead of the full product list.
 export default function ProductsBrowser({ initialProducts = [] }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const q = searchParams.get('q')?.trim() || '';
+
   const [category, setCategory] = useState("all");
   const [priceRange, setPriceRange] = useState([0, 300]);
   const [sortBy, setSortBy] = useState("featured");
+  const [searchResults, setSearchResults] = useState(null); // null = no active search
+  const [searching, setSearching] = useState(false);
 
-  // Filter and sort products (logic lives in filter-products.mjs so it is unit-testable)
-  const filteredProducts = filterProducts(initialProducts, { category, priceRange, sortBy });
+  useEffect(() => {
+    if (!q) {
+      setSearchResults(null);
+      return;
+    }
+    setSearching(true);
+    searchProducts(q)
+      .then(res => {
+        setSearchResults(Array.isArray(res) ? res : []);
+        setSearching(false);
+      })
+      .catch(() => {
+        setSearchResults([]);
+        setSearching(false);
+      });
+  }, [q]);
+
+  const baseProducts = searchResults !== null ? searchResults : initialProducts;
+  const filteredProducts = filterProducts(baseProducts, { category, priceRange, sortBy });
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Search context banner */}
+      {q && (
+        <div className="mb-6 flex items-center justify-between rounded-md border bg-muted/50 px-4 py-3">
+          <p className="text-sm text-muted-foreground">
+            {searching
+              ? 'Searching…'
+              : `${searchResults?.length ?? 0} result${searchResults?.length === 1 ? '' : 's'} for "${q}"`}
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/products')}
+          >
+            Clear search
+          </Button>
+        </div>
+      )}
+
       {/* Filters and Sort */}
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
         <Select value={category} onValueChange={setCategory}>
@@ -83,9 +128,7 @@ export default function ProductsBrowser({ initialProducts = [] }) {
                 <p className="mb-3 text-sm text-muted-foreground">{product.description}</p>
                 <div className="flex items-center justify-between">
                   <span className="text-xl font-bold">${product.price}</span>
-                  <Button size="sm">
-                    View Details
-                  </Button>
+                  <Button size="sm">View Details</Button>
                 </div>
               </CardContent>
             </Card>
@@ -93,9 +136,9 @@ export default function ProductsBrowser({ initialProducts = [] }) {
         ))}
       </div>
 
-      {filteredProducts.length === 0 && (
+      {!searching && filteredProducts.length === 0 && (
         <div className="text-center text-muted-foreground">
-          No products found matching your criteria.
+          {q ? `No products found for "${q}".` : 'No products found matching your criteria.'}
         </div>
       )}
     </div>
