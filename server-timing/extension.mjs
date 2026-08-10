@@ -38,6 +38,8 @@ export function start(options) {
 			const origWriteHead = nodeRes.writeHead.bind(nodeRes);
 			nodeRes.writeHead = function (statusCode, ...rest) {
 				try {
+					if (store.emitted) return origWriteHead(statusCode, ...rest);
+					store.emitted = true;
 					const dur = store.decisionDur ?? (performance.now() - started);
 					const segment = `decision;dur=${Number(dur).toFixed(1)}`;
 					const lastArg = rest[rest.length - 1];
@@ -68,7 +70,8 @@ export function start(options) {
 		return (async () => {
 			const response = await next(request);
 			try {
-				if (response?.headers?.append) {
+				if (response?.headers?.append && !store.emitted) {
+					store.emitted = true;
 					const dur = store.decisionDur ?? (performance.now() - started);
 					response.headers.append('Server-Timing', `decision;dur=${Number(dur).toFixed(1)}`);
 				}
