@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 /**
  * Harper HTTP middleware that publishes a `decision;dur=<ms>` segment on the
  * `Server-Timing` response header (issue #7).
@@ -15,6 +17,11 @@
  * personalized route that time is dominated by the OpenAI call, making it a
  * useful approximation; cached routes will show a few ms.
  */
+// Shared with lib/server-timing.mjs via globalThis: the two modules are loaded as
+// separate packages (the component vs the app), so a module-level instance would not
+// be the same object on both sides.
+const als = (globalThis.__serverTimingALS ??= new AsyncLocalStorage());
+
 export function start(options) {
 	options.server.http((request, next) => {
 		const store = {};
@@ -67,7 +74,11 @@ export function start(options) {
 			};
 		}
 
-		return (async () => {
+		// Run the rest of the request inside the ALS so a resource method can reach the
+		// store even when getContext() hands it a context that does not link back to this
+		// request object. React's App Router still breaks the chain, which is what the
+		// elapsed-time fallback above covers.
+		return als.run(store, async () => {
 			const response = await next(request);
 			try {
 				if (response?.headers?.append && !store.emitted) {
@@ -79,6 +90,6 @@ export function start(options) {
 				// Timing instrumentation must never break the response.
 			}
 			return response;
-		})();
+		});
 	});
 }
