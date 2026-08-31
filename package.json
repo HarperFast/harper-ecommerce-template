@@ -11,7 +11,7 @@
 		"test:unit": "node --test integrationTests/cacheHandler.retry.test.mjs integrationTests/routes.helpers.test.mjs integrationTests/serverTiming.test.mjs"
 	},
 	"dependencies": {
-		"@harperfast/nextjs": "^2.0.0",
+		"@harperfast/nextjs": "^2.2.1",
 		"@radix-ui/react-dialog": "^1.1.1",
 		"@radix-ui/react-dropdown-menu": "^2.1.1",
 		"@radix-ui/react-select": "^2.1.1",
@@ -23,7 +23,7 @@
 		"harper": "^5.2.1",
 		"lucide-react": "^0.525.0",
 		"server-timing": "file:./server-timing",
-		"next": "^15.5.19",
+		"next": "^15.5.24",
 		"openai": "^5.9.1",
 		"react": "^19.1.0",
 		"react-dom": "^19.1.0",
